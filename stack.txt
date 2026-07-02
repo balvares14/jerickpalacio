@@ -4,4 +4,4 @@ Hosting / Deployment,Vercel,Hosting the React frontend,"Best-in-class for React,
 Database,Supabase,PostgreSQL database + Auth,"Free generous tier, real SQL, easy to use from React, built-in auth"
 File Storage,Supabase Storage,"Images, videos, audio, documents","Same platform as DB, simple uploads, public/private files, generous free tier"
 Domain + DNS,Cloudflare,Domain registration + DNS management,"Cheapest reliable registrar, excellent performance & security, free DNS"
-Version Control,GitHub,Code repository + version control,"Industry standard, seamless integration with Vercel"
+Version Control,GitHub,Code repository + version control,"Industry standard, seamless integration with Vercel" 
