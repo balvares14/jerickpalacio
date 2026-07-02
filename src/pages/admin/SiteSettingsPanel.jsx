@@ -1,155 +1,463 @@
 import { useEffect, useState } from 'react'
+
 import { getSupabaseClient } from '../../lib/supabaseClient'
+
 import { useSite } from '../../context/SiteContext'
 
+import MediaLibraryPicker from '../../components/admin/MediaLibraryPicker'
+
+import CollapsibleSection from '../../components/admin/CollapsibleSection'
+
+import { STORAGE_FOLDERS } from '../../lib/constants'
+
+import { useNotice } from '../../context/NoticeContext'
+
+import FloatingSaveButton from '../../components/admin/FloatingSaveButton'
+import { AdminInput } from '../../components/admin/AdminField'
+
+
+
+const SITE_SETTINGS_FORM_ID = 'site-settings-form'
+
+
+
+const emptyNav = { label: '', path: '', sort_order: 0, is_visible: true }
+
+
+
+function truncate(text, max = 48) {
+
+  if (!text) return ''
+
+  return text.length > max ? `${text.slice(0, max)}…` : text
+
+}
+
+
+
 export default function SiteSettingsPanel() {
+
   const { refresh: refreshSite } = useSite()
+
   const [settingsId, setSettingsId] = useState(null)
+
   const [form, setForm] = useState({
+
     logo_text: '',
+
     logo_link_path: '/contact',
+
+    logo_media_id: null,
+
     footer_text: '',
+
     footer_link_path: '/contact',
-    masthead_enabled: true,
-    masthead_title: '',
-    masthead_subtitle: '',
-    masthead_show_arrow: true,
-    work_grid_columns: 2,
+
     site_title: '',
+
   })
-  const [status, setStatus] = useState('')
+
+  const [navItems, setNavItems] = useState([])
+
+  const [saving, setSaving] = useState(false)
+
   const [loading, setLoading] = useState(true)
 
+  const { showNotice, showBlockingError } = useNotice()
+
+
+
   useEffect(() => {
+
     async function load() {
+
       const supabase = getSupabaseClient()
-      const { data, error } = await supabase.from('site_settings').select('*').limit(1).maybeSingle()
-      if (error) {
-        setStatus(error.message)
-      } else if (data) {
-        setSettingsId(data.id)
+
+      const [settingsRes, navRes] = await Promise.all([
+
+        supabase.from('site_settings').select('*').limit(1).maybeSingle(),
+
+        supabase.from('nav_items').select('*').order('sort_order', { ascending: true }),
+
+      ])
+
+
+
+      if (settingsRes.error) showBlockingError({ message: settingsRes.error.message })
+
+      else if (settingsRes.data) {
+
+        setSettingsId(settingsRes.data.id)
+
         setForm({
-          logo_text: data.logo_text ?? '',
-          logo_link_path: data.logo_link_path ?? '/contact',
-          footer_text: data.footer_text ?? '',
-          footer_link_path: data.footer_link_path ?? '/contact',
-          masthead_enabled: data.masthead_enabled ?? true,
-          masthead_title: data.masthead_title ?? '',
-          masthead_subtitle: data.masthead_subtitle ?? '',
-          masthead_show_arrow: data.masthead_show_arrow ?? true,
-          work_grid_columns: data.work_grid_columns ?? 2,
-          site_title: data.site_title ?? '',
+
+          logo_text: settingsRes.data.logo_text ?? '',
+
+          logo_link_path: settingsRes.data.logo_link_path ?? '/contact',
+
+          logo_media_id: settingsRes.data.logo_media_id,
+
+          footer_text: settingsRes.data.footer_text ?? '',
+
+          footer_link_path: settingsRes.data.footer_link_path ?? '/contact',
+
+          site_title: settingsRes.data.site_title ?? '',
+
         })
+
       }
+
+
+
+      if (navRes.data) setNavItems(navRes.data)
+
       setLoading(false)
+
     }
+
     load()
+
   }, [])
 
+
+
   function updateField(key, value) {
+
     setForm((prev) => ({ ...prev, [key]: value }))
+
   }
 
-  async function handleSave(e) {
-    e.preventDefault()
-    setStatus('Saving…')
+
+
+  function updateNav(index, key, value) {
+
+    setNavItems((prev) => prev.map((item, i) => (i === index ? { ...item, [key]: value } : item)))
+
+  }
+
+
+
+  async function saveNavItem(item) {
+
     const supabase = getSupabaseClient()
-    const payload = { ...form, work_grid_columns: Number(form.work_grid_columns) }
 
-    const { error } = settingsId
-      ? await supabase.from('site_settings').update(payload).eq('id', settingsId)
-      : await supabase.from('site_settings').insert(payload)
+    const payload = {
 
-    if (error) {
-      setStatus(error.message)
-      return
+      label: item.label,
+
+      path: item.path,
+
+      sort_order: Number(item.sort_order),
+
+      is_visible: item.is_visible,
+
     }
 
-    await refreshSite()
-    setStatus('Saved.')
+    return item.id
+
+      ? supabase.from('nav_items').update(payload).eq('id', item.id)
+
+      : supabase.from('nav_items').insert(payload)
+
   }
 
-  if (loading) return <p className="admin-muted">Loading settings…</p>
+
+
+  async function handleSave(e) {
+
+    e.preventDefault()
+
+    setSaving(true)
+
+    const supabase = getSupabaseClient()
+
+
+
+    const { error: settingsError } = settingsId
+
+      ? await supabase.from('site_settings').update(form).eq('id', settingsId)
+
+      : await supabase.from('site_settings').insert(form)
+
+
+
+    if (settingsError) {
+
+      showBlockingError({ message: settingsError.message })
+
+      setSaving(false)
+
+      return
+
+    }
+
+
+
+    for (const item of navItems) {
+
+      if (!item.label || !item.path) continue
+
+      const { error } = await saveNavItem(item)
+
+      if (error) {
+
+        showBlockingError({ message: error.message })
+
+        setSaving(false)
+
+        return
+
+      }
+
+    }
+
+
+
+    await refreshSite()
+
+    showNotice({ title: 'Saved', message: 'Site settings updated.' })
+
+    setSaving(false)
+
+  }
+
+
+
+  async function deleteNav(id) {
+
+    if (!window.confirm('Delete this nav link?')) return
+
+    const supabase = getSupabaseClient()
+
+    const { error } = await supabase.from('nav_items').delete().eq('id', id)
+
+    if (error) showBlockingError({ message: error.message })
+
+    else {
+
+      setNavItems((prev) => prev.filter((n) => n.id !== id))
+
+      await refreshSite()
+
+      showNotice({ title: 'Removed', message: 'Navigation link deleted.' })
+
+    }
+
+  }
+
+
+
+  const logoSummary = [
+
+    form.logo_text || 'No logo text',
+
+    form.logo_media_id ? 'image' : null,
+
+    form.logo_link_path,
+
+  ]
+
+    .filter(Boolean)
+
+    .join(' · ')
+
+
+
+  const footerSummary = [truncate(form.footer_text) || 'No footer text', form.footer_link_path]
+
+    .filter(Boolean)
+
+    .join(' · ')
+
+
+
+  const visibleNav = navItems.filter((n) => n.label)
+
+  const navSummary =
+
+    visibleNav.length === 0
+
+      ? 'No links'
+
+      : `${visibleNav.length} link${visibleNav.length === 1 ? '' : 's'} · ${visibleNav.map((n) => n.label).join(', ')}`
+
+
+
+  if (loading) return <p className="admin-muted admin-loading-text">Loading settings…</p>
+
+
 
   return (
-    <form className="admin-form" onSubmit={handleSave}>
-      <h2>Site settings</h2>
-      <p className="admin-muted">Logo, masthead, footer, and grid layout for the home page.</p>
 
-      <fieldset>
-        <legend>Logo &amp; footer</legend>
+    <form id={SITE_SETTINGS_FORM_ID} className="admin-form admin-form--compact" onSubmit={handleSave}>
+
+      <div className="admin-panel-heading">
+
+        <h2 className="admin-panel-title">Site settings</h2>
+
+        <p className="admin-muted">Logo, footer, and header navigation.</p>
+
+      </div>
+
+
+
+      <CollapsibleSection title="Logo" summary={logoSummary}>
+
         <label>
+
           Logo text
-          <input value={form.logo_text} onChange={(e) => updateField('logo_text', e.target.value)} />
+
+          <AdminInput value={form.logo_text} onChange={(e) => updateField('logo_text', e.target.value)} />
+
         </label>
+
+        <MediaLibraryPicker
+
+          label="Logo image (optional)"
+
+          value={form.logo_media_id}
+
+          onChange={(id) => updateField('logo_media_id', id)}
+
+          accept="image/*"
+
+          folder={STORAGE_FOLDERS.logo}
+
+        />
+
         <label>
+
           Logo link path
-          <input value={form.logo_link_path} onChange={(e) => updateField('logo_link_path', e.target.value)} />
+
+          <AdminInput value={form.logo_link_path} onChange={(e) => updateField('logo_link_path', e.target.value)} />
+
         </label>
+
         <label>
-          Footer text
-          <input value={form.footer_text} onChange={(e) => updateField('footer_text', e.target.value)} />
-        </label>
-        <label>
-          Footer link path
-          <input value={form.footer_link_path} onChange={(e) => updateField('footer_link_path', e.target.value)} />
-        </label>
-        <label>
+
           Site title (browser tab)
-          <input value={form.site_title} onChange={(e) => updateField('site_title', e.target.value)} />
-        </label>
-      </fieldset>
 
-      <fieldset>
-        <legend>Masthead</legend>
-        <label className="admin-checkbox">
-          <input
-            type="checkbox"
-            checked={form.masthead_enabled}
-            onChange={(e) => updateField('masthead_enabled', e.target.checked)}
-          />
-          Show masthead on home page
-        </label>
-        <label>
-          Masthead title
-          <input value={form.masthead_title} onChange={(e) => updateField('masthead_title', e.target.value)} />
-        </label>
-        <label>
-          Masthead subtitle
-          <input
-            value={form.masthead_subtitle}
-            onChange={(e) => updateField('masthead_subtitle', e.target.value)}
-          />
-        </label>
-        <label className="admin-checkbox">
-          <input
-            type="checkbox"
-            checked={form.masthead_show_arrow}
-            onChange={(e) => updateField('masthead_show_arrow', e.target.checked)}
-          />
-          Show scroll arrow
-        </label>
-      </fieldset>
+          <AdminInput value={form.site_title} onChange={(e) => updateField('site_title', e.target.value)} />
 
-      <fieldset>
-        <legend>Work grid</legend>
-        <label>
-          Grid columns
-          <select
-            value={form.work_grid_columns}
-            onChange={(e) => updateField('work_grid_columns', e.target.value)}
-          >
-            <option value={1}>1 column</option>
-            <option value={2}>2 columns</option>
-            <option value={3}>3 columns</option>
-          </select>
         </label>
-      </fieldset>
 
-      <button type="submit" className="admin-btn admin-btn-primary">
-        Save settings
-      </button>
-      {status && <p className="admin-status">{status}</p>}
+      </CollapsibleSection>
+
+
+
+      <CollapsibleSection title="Footer" summary={footerSummary}>
+
+        <label>
+
+          Footer text
+
+          <AdminInput value={form.footer_text} onChange={(e) => updateField('footer_text', e.target.value)} />
+
+        </label>
+
+        <label>
+
+          Footer link path
+
+          <AdminInput value={form.footer_link_path} onChange={(e) => updateField('footer_link_path', e.target.value)} />
+
+        </label>
+
+      </CollapsibleSection>
+
+
+
+      <CollapsibleSection title="Header navigation" summary={navSummary}>
+
+        {navItems.map((item, index) => (
+
+          <div key={item.id ?? index} className="admin-subcard admin-subcard--compact admin-nav-row">
+
+            <label>
+
+              Label
+
+              <AdminInput value={item.label} onChange={(e) => updateNav(index, 'label', e.target.value)} />
+
+            </label>
+
+            <label>
+
+              Path
+
+              <AdminInput value={item.path} onChange={(e) => updateNav(index, 'path', e.target.value)} />
+
+            </label>
+
+            <label>
+
+              Order
+
+              <input
+
+                type="number"
+
+                value={item.sort_order}
+
+                onChange={(e) => updateNav(index, 'sort_order', e.target.value)}
+
+              />
+
+            </label>
+
+            <label className="admin-checkbox">
+
+              <input
+
+                type="checkbox"
+
+                checked={item.is_visible}
+
+                onChange={(e) => updateNav(index, 'is_visible', e.target.checked)}
+
+              />
+
+              Visible
+
+            </label>
+
+            {item.id && (
+
+              <button type="button" className="admin-btn admin-btn-ghost admin-btn-xs" onClick={() => deleteNav(item.id)}>
+
+                Remove
+
+              </button>
+
+            )}
+
+          </div>
+
+        ))}
+
+        <button
+
+          type="button"
+
+          className="admin-btn admin-btn-ghost admin-btn-xs"
+
+          onClick={() => setNavItems((prev) => [...prev, { ...emptyNav, sort_order: prev.length }])}
+
+        >
+
+          + Add nav link
+
+        </button>
+
+      </CollapsibleSection>
+
+
+
+      <FloatingSaveButton formId={SITE_SETTINGS_FORM_ID} label="Save site settings" saving={saving} />
+
     </form>
+
   )
+
 }
+

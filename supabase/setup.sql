@@ -27,7 +27,8 @@ create type block_type as enum (
   'audio',
   'image_row',
   'text_media_split',
-  'spacer'
+  'spacer',
+  'inquiry_form'
 );
 
 -- -----------------------------------------------------------------------------
@@ -229,11 +230,16 @@ create trigger page_blocks_updated_at
 -- -----------------------------------------------------------------------------
 create table public.inquiries (
   id uuid primary key default gen_random_uuid(),
-  name text not null,
-  email text not null,
+  name text,
+  email text,
+  phone text,
   message text not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint inquiries_contact_required check (
+    (email is not null and length(trim(email)) > 0)
+    or (phone is not null and length(trim(phone)) > 0)
+  )
 );
 
 create trigger inquiries_updated_at

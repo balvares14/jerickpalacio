@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { AdminInput } from '../../components/admin/AdminField'
 
 export default function AdminLogin() {
   const { session, isAdmin, signIn, signOut } = useAuth()
@@ -45,10 +46,11 @@ export default function AdminLogin() {
 
         <label>
           Email
-          <input
+          <AdminInput
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
             required
             autoComplete="email"
           />
@@ -56,10 +58,11 @@ export default function AdminLogin() {
 
         <label>
           Password
-          <input
+          <AdminInput
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
             required
             autoComplete="current-password"
           />

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ProjectCover from '../components/ProjectCover'
 import { useSite } from '../context/SiteContext'
-import { useWorkItems } from '../hooks/useWorkItems'
+import { useHomePage, useWorkItems } from '../hooks/useWorkItems'
 
 function BackToTopIcon() {
   return (
@@ -29,24 +29,42 @@ function BackToTopIcon() {
 }
 
 export default function WorkPage() {
-  const { settings } = useSite()
-  const { items, loading } = useWorkItems()
+  const { settings: siteSettings } = useSite()
+  const { homePage, settings: pageSettings, loading: homeLoading } = useHomePage()
+  const { items, loading: itemsLoading } = useWorkItems(homePage?.id)
   const [showFixedBackToTop, setShowFixedBackToTop] = useState(false)
 
-  const gridClass = `project-covers project-covers--cols-${settings.work_grid_columns ?? 2}`
-  const footerText = settings.footer_text || settings.logo_text
-  const footerPath = settings.footer_link_path || '/contact'
+  // Fall back to site_settings masthead if home page row not migrated yet
+  const masthead = homePage
+    ? pageSettings
+    : {
+        masthead_enabled: siteSettings.masthead_enabled,
+        masthead_title: siteSettings.masthead_title,
+        masthead_subtitle: siteSettings.masthead_subtitle,
+        masthead_show_arrow: siteSettings.masthead_show_arrow,
+        show_back_to_top: false,
+        work_grid_columns: siteSettings.work_grid_columns,
+      }
+
+  const gridClass = `project-covers project-covers--cols-${masthead.work_grid_columns ?? 2}`
+  const footerText = siteSettings.footer_text || siteSettings.logo_text
+  const footerPath = siteSettings.footer_link_path || '/contact'
+  const loading = homeLoading || itemsLoading
 
   useEffect(() => {
-    document.title = settings.site_title || settings.logo_text || 'Portfolio'
-  }, [settings])
+    document.title = homePage?.title || siteSettings.site_title || siteSettings.logo_text || 'Portfolio'
+  }, [homePage, siteSettings])
 
   useEffect(() => {
+    if (!masthead.show_back_to_top) {
+      setShowFixedBackToTop(false)
+      return undefined
+    }
     const onScroll = () => setShowFixedBackToTop(window.scrollY > window.innerHeight * 0.75)
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+  }, [masthead.show_back_to_top])
 
   const scrollToTop = (event) => {
     event.preventDefault()
@@ -59,13 +77,13 @@ export default function WorkPage() {
 
   return (
     <>
-      {settings.masthead_enabled && (
+      {masthead.masthead_enabled && (
         <div className="masthead">
           <div className="masthead-contents">
             <div className="masthead-text">
-              <h1 className="preserve-whitespace main-text">{settings.masthead_title}</h1>
-              <p className="preserve-whitespace main-text">{settings.masthead_subtitle}</p>
-              {settings.masthead_show_arrow && (
+              <h1 className="preserve-whitespace main-text">{masthead.masthead_title}</h1>
+              <p className="preserve-whitespace main-text">{masthead.masthead_subtitle}</p>
+              {masthead.masthead_show_arrow && (
                 <button
                   type="button"
                   className="masthead-arrow-container"
@@ -87,28 +105,32 @@ export default function WorkPage() {
               <section className={gridClass} id="project-gallery">
                 {loading && <p className="work-loading">Loading…</p>}
                 {!loading && items.length === 0 && (
-                  <p className="work-empty">No published work yet. Add items in the admin dashboard.</p>
+                  <p className="work-empty">No published work yet. Add grid items on the Home page in admin.</p>
                 )}
                 {items.map((project) => (
                   <ProjectCover key={project.id} project={project} />
                 ))}
               </section>
 
-              <section className="back-to-top">
-                <a href="#" onClick={scrollToTop}>
-                  <span className="arrow">↑</span>
-                  <span className="preserve-whitespace">Back to Top</span>
-                </a>
-              </section>
+              {masthead.show_back_to_top && (
+                <>
+                  <section className="back-to-top">
+                    <a href="#" onClick={scrollToTop}>
+                      <span className="arrow">↑</span>
+                      <span className="preserve-whitespace">Back to Top</span>
+                    </a>
+                  </section>
 
-              <a
-                href="#"
-                className={`back-to-top-fixed${showFixedBackToTop ? ' is-visible' : ''}`}
-                aria-label="Back to top"
-                onClick={scrollToTop}
-              >
-                <BackToTopIcon />
-              </a>
+                  <a
+                    href="#"
+                    className={`back-to-top-fixed${showFixedBackToTop ? ' is-visible' : ''}`}
+                    aria-label="Back to top"
+                    onClick={scrollToTop}
+                  >
+                    <BackToTopIcon />
+                  </a>
+                </>
+              )}
 
               <footer className="site-footer">
                 <div className="footer-text">
