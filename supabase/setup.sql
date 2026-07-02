@@ -241,6 +241,22 @@ create trigger inquiries_updated_at
   for each row execute function public.set_updated_at();
 
 -- -----------------------------------------------------------------------------
+-- Table grants (required before RLS — without these you get 403 / error 42501)
+-- -----------------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+
+grant select, insert, update, delete on all tables in schema public to anon, authenticated;
+grant usage, select on all sequences in schema public to anon, authenticated;
+
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to anon, authenticated;
+
+alter default privileges in schema public
+  grant usage, select on sequences to anon, authenticated;
+
+grant execute on function public.is_admin() to anon, authenticated;
+
+-- -----------------------------------------------------------------------------
 -- Row Level Security
 -- -----------------------------------------------------------------------------
 alter table public.profiles enable row level security;
