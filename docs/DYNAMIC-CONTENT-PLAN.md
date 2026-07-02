@@ -308,7 +308,7 @@ Replace `src/data/projects.js` with hooks/services:
 ```
 src/
   lib/
-    supabase.js          # already scaffolded
+    supabaseClient.js          # Supabase client (export: supabase)
   hooks/
     useSiteSettings.js
     useNavItems.js
@@ -401,7 +401,7 @@ Set in Vercel project settings (and local `.env`):
 
 ```
 VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
+VITE_SUPABASE_PUBLISHABLE_KEY=
 ```
 
 Admin uses the same anon key; RLS restricts writes to authenticated users. Never expose the service role key in the frontend.
