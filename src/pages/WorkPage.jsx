@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ProjectCover from '../components/ProjectCover'
-import { projects, SITE_NAME } from '../data/projects'
+import { useSite } from '../context/SiteContext'
+import { useWorkItems } from '../hooks/useWorkItems'
 
 function BackToTopIcon() {
   return (
@@ -28,7 +29,17 @@ function BackToTopIcon() {
 }
 
 export default function WorkPage() {
+  const { settings } = useSite()
+  const { items, loading } = useWorkItems()
   const [showFixedBackToTop, setShowFixedBackToTop] = useState(false)
+
+  const gridClass = `project-covers project-covers--cols-${settings.work_grid_columns ?? 2}`
+  const footerText = settings.footer_text || settings.logo_text
+  const footerPath = settings.footer_link_path || '/contact'
+
+  useEffect(() => {
+    document.title = settings.site_title || settings.logo_text || 'Portfolio'
+  }, [settings])
 
   useEffect(() => {
     const onScroll = () => setShowFixedBackToTop(window.scrollY > window.innerHeight * 0.75)
@@ -48,24 +59,37 @@ export default function WorkPage() {
 
   return (
     <>
-      <div className="masthead">
-        <div className="masthead-contents">
-          <div className="masthead-text">
-            <h1 className="preserve-whitespace main-text">We&apos;re so glad to have you.</h1>
-            <p className="preserve-whitespace main-text">Check out what We&apos;ve got.</p>
-            <button type="button" className="masthead-arrow-container" aria-label="Scroll to gallery" onClick={scrollToGallery}>
-              <div className="masthead-arrow" />
-            </button>
+      {settings.masthead_enabled && (
+        <div className="masthead">
+          <div className="masthead-contents">
+            <div className="masthead-text">
+              <h1 className="preserve-whitespace main-text">{settings.masthead_title}</h1>
+              <p className="preserve-whitespace main-text">{settings.masthead_subtitle}</p>
+              {settings.masthead_show_arrow && (
+                <button
+                  type="button"
+                  className="masthead-arrow-container"
+                  aria-label="Scroll to gallery"
+                  onClick={scrollToGallery}
+                >
+                  <div className="masthead-arrow" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="site-wrap cfix">
         <div className="site-container">
           <div className="site-content">
             <main>
-              <section className="project-covers" id="project-gallery">
-                {projects.map((project) => (
+              <section className={gridClass} id="project-gallery">
+                {loading && <p className="work-loading">Loading…</p>}
+                {!loading && items.length === 0 && (
+                  <p className="work-empty">No published work yet. Add items in the admin dashboard.</p>
+                )}
+                {items.map((project) => (
                   <ProjectCover key={project.id} project={project} />
                 ))}
               </section>
@@ -88,7 +112,7 @@ export default function WorkPage() {
 
               <footer className="site-footer">
                 <div className="footer-text">
-                  <Link to="/contact">{SITE_NAME}</Link>
+                  <Link to={footerPath}>{footerText}</Link>
                 </div>
               </footer>
             </main>

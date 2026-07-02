@@ -289,6 +289,26 @@ img {
   gap: 0;
 }
 
+.project-covers--cols-1 {
+  grid-template-columns: 1fr;
+}
+
+.project-covers--cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.project-covers--cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.work-loading,
+.work-empty {
+  grid-column: 1 / -1;
+  padding: 48px 24px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.55);
+}
+
 .project-cover {
   position: relative;
   display: block;
