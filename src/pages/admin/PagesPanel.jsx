@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSupabaseClient } from '../../lib/supabaseClient'
-import { getTemplateLabel } from '../../lib/pageTemplates'
+import { getTemplateLabel, isHomePage } from '../../lib/pageTemplates'
 import { useNotice } from '../../context/NoticeContext'
 
 function pagePath(page) {
-  if (page.template === 'home') return '/work'
+  if (isHomePage(page)) return '/work'
   return page.slug ? `/${page.slug}` : '—'
 }
 
@@ -37,7 +37,7 @@ export default function PagesPanel() {
 
   async function handleDelete(page, e) {
     e.stopPropagation()
-    if (page.template === 'home') {
+    if (isHomePage(page)) {
       showNotice({
         title: 'Cannot delete',
         message: 'The Home page cannot be deleted.',
@@ -95,10 +95,10 @@ export default function PagesPanel() {
                   <span className="pages-list-sep" aria-hidden="true">
                     ·
                   </span>
-                  <span className="pages-list-template">{getTemplateLabel(page.template)}</span>
+                  <span className="pages-list-template">{getTemplateLabel(isHomePage(page) ? 'home' : page.template)}</span>
                 </div>
               </button>
-              {page.template !== 'home' && (
+              {!isHomePage(page) && (
                 <button
                   type="button"
                   className="pages-list-action pages-list-action--danger"

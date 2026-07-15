@@ -37,7 +37,7 @@ export function useHomePage() {
         return
       }
 
-      const { data: page, error } = await supabase
+      let { data: page, error } = await supabase
         .from('pages')
         .select('*')
         .eq('template', 'home')
@@ -46,6 +46,20 @@ export function useHomePage() {
         .maybeSingle()
 
       if (error) console.error('Home page load error:', error)
+
+      // Fallback: reserved /work slug (in case template drifted)
+      if (!page) {
+        const bySlug = await supabase
+          .from('pages')
+          .select('*')
+          .eq('slug', 'work')
+          .eq('is_published', true)
+          .limit(1)
+          .maybeSingle()
+        page = bySlug.data
+        if (bySlug.error) console.error('Home page slug load error:', bySlug.error)
+      }
+
       if (page) {
         setHomePage(page)
         setSettings(mergePageSettings('home', page.page_settings))
@@ -87,7 +101,7 @@ export function useWorkItems(homePageId) {
         .order('sort_order', { ascending: true })
 
       if (homePageId) {
-        query = query.eq('page_id', homePageId)
+        query = query.or(`page_id.eq.${homePageId},page_id.is.null`)
       }
 
       const { data, error } = await query
@@ -98,7 +112,8 @@ export function useWorkItems(homePageId) {
       } else if (data?.length) {
         setItems(data.map((item) => ({ ...item, href: `/${item.slug}` })))
       } else {
-        setItems([])
+        // Empty DB grid — keep showing legacy static covers until imported
+        setItems(mapFallback())
       }
       setLoading(false)
     }

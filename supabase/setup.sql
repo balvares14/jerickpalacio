@@ -17,7 +17,8 @@ create type page_template as enum (
   'multi_column',
   'alternating',
   'full_bleed',
-  'video_gallery'
+  'video_gallery',
+  'home'
 );
 create type block_type as enum (
   'heading',
@@ -177,6 +178,8 @@ create table public.pages (
   is_published boolean not null default false,
   meta_description text,
   og_image_media_id uuid references public.media_assets (id) on delete set null,
+  page_settings jsonb not null default '{}',
+  sort_order int not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -190,6 +193,7 @@ create trigger pages_updated_at
 -- -----------------------------------------------------------------------------
 create table public.work_items (
   id uuid primary key default gen_random_uuid(),
+  page_id uuid references public.pages (id) on delete cascade,
   slug text not null unique,
   title text not null,
   subtitle text,
@@ -201,6 +205,8 @@ create table public.work_items (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create index if not exists work_items_page_id_sort on public.work_items (page_id, sort_order);
 
 create trigger work_items_updated_at
   before update on public.work_items
@@ -449,6 +455,24 @@ insert into public.site_settings (
 insert into public.nav_items (label, path, sort_order) values
   ('Work', '/work', 0),
   ('Contact Inquiry', '/contact', 1);
+
+insert into public.pages (title, slug, page_type, template, is_published, sort_order, page_settings)
+values (
+  'Home',
+  'work',
+  'custom',
+  'home',
+  true,
+  0,
+  jsonb_build_object(
+    'masthead_enabled', true,
+    'masthead_title', 'We''re so glad to have you.',
+    'masthead_subtitle', 'Check out what We''ve got.',
+    'masthead_show_arrow', true,
+    'show_back_to_top', false,
+    'work_grid_columns', 2
+  )
+);
 
 -- =============================================================================
 -- FIRST ADMIN USER (run after creating user in Auth → Users → Add user)

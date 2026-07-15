@@ -15,6 +15,7 @@ export function AuthProvider({ children }) {
     }
 
     const supabase = getSupabaseClient()
+    let cancelled = false
 
     async function loadProfile(userId) {
       const { data, error } = await supabase
@@ -24,25 +25,40 @@ export function AuthProvider({ children }) {
         .maybeSingle()
 
       if (error) console.error('Profile load error:', error)
-      setProfile(data)
+      if (!cancelled) setProfile(data)
+      return data
     }
 
-    supabase.auth.getSession().then(({ data: { session: current } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: current } }) => {
+      if (cancelled) return
       setSession(current)
-      if (current?.user) loadProfile(current.user.id)
-      else setProfile(null)
-      setLoading(false)
+      if (current?.user) {
+        await loadProfile(current.user.id)
+      } else {
+        setProfile(null)
+      }
+      if (!cancelled) setLoading(false)
     })
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-      if (nextSession?.user) loadProfile(nextSession.user.id)
-      else setProfile(null)
+    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      if (cancelled) return
+
+      if (nextSession?.user) {
+        // Keep prior profile while reloading same user — avoids Access denied flash
+        setSession(nextSession)
+        await loadProfile(nextSession.user.id)
+      } else {
+        setSession(null)
+        setProfile(null)
+      }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   const value = useMemo(
@@ -72,6 +88,7 @@ export function AuthProvider({ children }) {
         const { error } = await supabase.auth.signOut()
         if (error) throw error
         setProfile(null)
+        setSession(null)
       },
     }),
     [session, profile, loading],

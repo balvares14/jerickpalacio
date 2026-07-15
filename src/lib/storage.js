@@ -1,5 +1,6 @@
 import { getSupabaseClient } from './supabaseClient'
 import { STORAGE_BUCKET, STORAGE_FOLDERS } from './constants'
+import { classifyExternalMediaUrl, isExternalAsset } from './mediaUrls'
 
 function inferMediaType(file) {
   if (file.type.startsWith('video/')) return 'video'
@@ -43,14 +44,63 @@ export async function uploadMediaAsset(file, folder = STORAGE_FOLDERS.covers) {
   return data
 }
 
+/** Register an image or YouTube (or direct video) URL in the media library — no file upload. */
+export async function createMediaAssetFromUrl(rawUrl) {
+  const supabase = getSupabaseClient()
+  const meta = classifyExternalMediaUrl(rawUrl)
+
+  const { data: existing } = await supabase
+    .from('media_assets')
+    .select('*')
+    .eq('public_url', meta.publicUrl)
+    .maybeSingle()
+
+  if (existing) return existing
+
+  if (meta.youtubeId) {
+    const { data: byPath } = await supabase
+      .from('media_assets')
+      .select('*')
+      .eq('storage_path', meta.storagePath)
+      .maybeSingle()
+    if (byPath) return byPath
+  }
+
+  const { data, error } = await supabase
+    .from('media_assets')
+    .insert({
+      storage_bucket: STORAGE_BUCKET,
+      storage_path: meta.storagePath,
+      public_url: meta.publicUrl,
+      media_type: meta.mediaType,
+      file_name: meta.fileName,
+      mime_type: meta.mimeType,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    const msg = error.message || ''
+    if (/row-level security|permission denied|42501/i.test(msg)) {
+      throw new Error(
+        'Could not save media — permission denied. Your account may not have the admin role.',
+      )
+    }
+    throw error
+  }
+  return data
+}
+
 export async function deleteMediaAsset(asset) {
   const supabase = getSupabaseClient()
 
-  const { error: storageError } = await supabase.storage
-    .from(asset.storage_bucket || STORAGE_BUCKET)
-    .remove([asset.storage_path])
+  if (!isExternalAsset(asset)) {
+    const { error: storageError } = await supabase.storage
+      .from(asset.storage_bucket || STORAGE_BUCKET)
+      .remove([asset.storage_path])
 
-  if (storageError) throw storageError
+    if (storageError) throw storageError
+  }
 
   const { error } = await supabase.from('media_assets').delete().eq('id', asset.id)
   if (error) throw error

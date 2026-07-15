@@ -1,20 +1,19 @@
+import { MediaDisplay } from './MediaDisplay'
+
 function MediaImage({ media, alt, className }) {
   if (!media?.public_url) return null
-  return <img src={media.public_url} alt={alt || media.alt_text || ''} className={className} loading="lazy" />
+  return <MediaDisplay asset={media} alt={alt} className={className} />
 }
 
 function MediaVideo({ media, poster, autoplay, className }) {
   if (!media?.public_url) return null
   return (
-    <video
-      src={media.public_url}
-      poster={poster?.public_url}
+    <MediaDisplay
+      asset={media}
+      poster={poster}
       className={className}
+      autoplay={autoplay}
       controls
-      muted={autoplay}
-      autoPlay={autoplay}
-      loop={autoplay}
-      playsInline
     />
   )
 }
@@ -24,7 +23,7 @@ function MediaAudio({ media, title, className }) {
   return (
     <div className={className}>
       {title && <p className="content-block-audio-title">{title}</p>}
-      <audio src={media.public_url} controls />
+      <MediaDisplay asset={media} />
     </div>
   )
 }

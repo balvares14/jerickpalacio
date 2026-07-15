@@ -92,3 +92,8 @@ export function mergePageSettings(templateId, pageSettings = {}) {
 export function getTemplateLabel(templateId) {
   return PAGE_TEMPLATES[templateId]?.label ?? templateId
 }
+
+/** Home/work grid page — by template or reserved slug. */
+export function isHomePage(page) {
+  return page?.template === 'home' || page?.slug === 'work'
+}

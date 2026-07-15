@@ -8,6 +8,7 @@ export default function AdminRoute({ children }) {
   if (loading) {
     return (
       <div className="admin-loading">
+        <div className="admin-spinner" aria-hidden="true" />
         <p>Loading…</p>
       </div>
     )

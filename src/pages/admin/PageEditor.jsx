@@ -3,11 +3,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getSupabaseClient } from '../../lib/supabaseClient'
 import TemplatePreview, { TemplatePickerPreview } from '../../components/admin/TemplatePreview'
 import MediaLibraryPicker from '../../components/admin/MediaLibraryPicker'
+import { MediaThumb } from '../../components/MediaDisplay'
 import {
   PAGE_TEMPLATES,
   TEMPLATE_LIST,
   getTemplateDefaults,
   mergePageSettings,
+  isHomePage,
 } from '../../lib/pageTemplates'
 import PageBlocksEditor from '../../components/admin/PageBlocksEditor'
 import InquiryFormBlockEditor from '../../components/admin/InquiryFormBlockEditor'
@@ -17,6 +19,7 @@ import { isContactPage } from '../../lib/inquiryFormDefaults'
 import { useNotice } from '../../context/NoticeContext'
 import FloatingSaveButton from '../../components/admin/FloatingSaveButton'
 import { AdminInput, AdminTextarea } from '../../components/admin/AdminField'
+import { importLegacyWorkGrid, loadHomeWorkItems } from '../../lib/workItems'
 
 const PAGE_EDITOR_FORM_ID = 'page-editor-form'
 
@@ -55,6 +58,7 @@ export default function PageEditor() {
   const [workDraft, setWorkDraft] = useState(emptyWorkItem)
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
+  const [importingLegacy, setImportingLegacy] = useState(false)
   const { showNotice, showBlockingError } = useNotice()
 
   useEffect(() => {
@@ -74,18 +78,47 @@ export default function PageEditor() {
         return
       }
 
+      // Slug /work must use the home template — repair rows that drifted to single_column
+      const home = isHomePage(page)
+      const template = home ? 'home' : page.template
+      const pageSettings = mergePageSettings(template, page.page_settings)
+
       setForm({
         ...page,
-        page_settings: mergePageSettings(page.template, page.page_settings),
+        template,
+        slug: home ? 'work' : page.slug,
+        page_settings: pageSettings,
       })
 
-      if (page.template === 'home') {
-        const { data: items } = await supabase
-          .from('work_items')
-          .select(`*, cover_media:media_assets!cover_media_id (*)`)
-          .eq('page_id', page.id)
-          .order('sort_order', { ascending: true })
-        setWorkItems(items ?? [])
+      if (home && page.template !== 'home') {
+        const { error: repairError } = await supabase
+          .from('pages')
+          .update({
+            template: 'home',
+            slug: 'work',
+            page_type: 'custom',
+            page_settings: pageSettings,
+          })
+          .eq('id', page.id)
+
+        if (repairError) {
+          console.error('Home template repair failed:', repairError)
+        } else {
+          showNotice({
+            title: 'Home page fixed',
+            message: 'This page was reset to the Home layout template.',
+            autoDismissMs: 5000,
+          })
+        }
+      }
+
+      if (home) {
+        try {
+          const items = await loadHomeWorkItems(page.id)
+          setWorkItems(items)
+        } catch (err) {
+          showBlockingError({ message: err.message || 'Could not load work grid items.' })
+        }
       }
 
       setLoading(false)
@@ -221,12 +254,39 @@ export default function PageEditor() {
     }
   }
 
+  async function handleImportLegacy() {
+    if (
+      !window.confirm(
+        'Import the default portfolio grid (Wedding Photography, Film & Digital Video, etc.) with their cover images?',
+      )
+    ) {
+      return
+    }
+    setImportingLegacy(true)
+    try {
+      const created = await importLegacyWorkGrid(pageId)
+      const items = await loadHomeWorkItems(pageId)
+      setWorkItems(items)
+      showNotice({
+        title: 'Legacy grid imported',
+        message: created.length
+          ? `Added ${created.length} item${created.length === 1 ? '' : 's'}.`
+          : 'Items already existed — linked any orphans to Home.',
+      })
+    } catch (err) {
+      showBlockingError({ message: err.message || 'Import failed.' })
+    }
+    setImportingLegacy(false)
+  }
+
   if (loading) return <p className="admin-muted">Loading page…</p>
 
-  const availableTemplates =
-    form.template === 'home' ? TEMPLATE_LIST : TEMPLATE_LIST.filter((t) => t.id !== 'home' || isNew)
-
+  const isHome = isHomePage(form)
   const isContact = isContactPage(form)
+
+  const availableTemplates = isHome
+    ? TEMPLATE_LIST
+    : TEMPLATE_LIST.filter((t) => t.id !== 'home' || isNew)
 
   return (
     <main className="admin-main">
@@ -262,6 +322,9 @@ export default function PageEditor() {
                     />
                   </label>
                 )}
+                {isHome && (
+                  <p className="admin-muted">Home page URL is fixed at <strong>/work</strong>.</p>
+                )}
                 {isContact && (
                   <p className="admin-muted">Contact page URL is fixed at <strong>/contact</strong>.</p>
                 )}
@@ -289,19 +352,55 @@ export default function PageEditor() {
                 />
               </fieldset>
 
-              {!isNew && form.template === 'home' && (
+              {!isNew && isHome && (
                 <fieldset>
                   <legend>Work grid items</legend>
                   <p className="admin-muted">Cards shown on the home page. Pick cover media from the library.</p>
 
+                  {workItems.length === 0 && (
+                    <div className="admin-subcard admin-subcard--compact">
+                      <p className="admin-muted">
+                        No grid items yet. The public site may still show the legacy static covers until you import or add items here.
+                      </p>
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn-primary admin-btn-xs"
+                        onClick={handleImportLegacy}
+                        disabled={importingLegacy}
+                      >
+                        {importingLegacy ? 'Importing…' : 'Import legacy grid'}
+                      </button>
+                    </div>
+                  )}
+
                   <ul className="work-items-list">
                     {workItems.map((item) => (
                       <li key={item.id} className="work-items-list-row">
-                        <span>
-                          <strong>{item.title}</strong> · /{item.slug}
-                        </span>
+                        <div className="work-items-list-main">
+                          {item.cover_media?.public_url ? (
+                            <MediaThumb asset={item.cover_media} className="work-items-thumb" />
+                          ) : (
+                            <div className="work-items-thumb work-items-thumb--empty" />
+                          )}
+                          <span>
+                            <strong>{item.title}</strong> · /{item.slug}
+                            {!item.cover_media_id && (
+                              <span className="admin-muted"> · no cover</span>
+                            )}
+                          </span>
+                        </div>
                         <div className="admin-row-actions">
-                          <button type="button" className="admin-btn admin-btn-ghost admin-btn-sm" onClick={() => setWorkDraft({ ...item, subtitle: item.subtitle ?? '' })}>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-ghost admin-btn-sm"
+                            onClick={() =>
+                              setWorkDraft({
+                                ...item,
+                                subtitle: item.subtitle ?? '',
+                                cover_media: item.cover_media ?? null,
+                              })
+                            }
+                          >
                             Edit
                           </button>
                           <button type="button" className="admin-btn admin-btn-danger admin-btn-sm" onClick={() => deleteWorkItem(item.id)}>
@@ -329,7 +428,9 @@ export default function PageEditor() {
                     <MediaLibraryPicker
                       label="Cover media"
                       value={workDraft.cover_media_id}
+                      previewAsset={workDraft.cover_media}
                       onChange={(id, asset) => setWorkDraft((p) => ({ ...p, cover_media_id: id, cover_media: asset }))}
+                      accept="image/*,video/*"
                       folder={STORAGE_FOLDERS.covers}
                     />
                     <label className="admin-checkbox">
@@ -348,7 +449,7 @@ export default function PageEditor() {
                 </fieldset>
               )}
 
-              {form.template === 'home' ? (
+              {isHome ? (
                 <HomeTemplateSettings settings={form.page_settings} onChange={updateSetting} />
               ) : (
                 <>
@@ -393,32 +494,63 @@ function introSummary(settings) {
 }
 
 function HomeTemplateSettings({ settings, onChange }) {
+  const mastheadOn = settings.masthead_enabled ?? true
+
   return (
     <fieldset>
       <legend>Home — masthead &amp; grid</legend>
+
+      <div className="admin-nested-group">
+        <label className="admin-checkbox">
+          <input
+            type="checkbox"
+            checked={mastheadOn}
+            onChange={(e) => onChange('masthead_enabled', e.target.checked)}
+          />
+          Show masthead
+        </label>
+        {mastheadOn && (
+          <div className="admin-nested-fields">
+            <label>
+              Masthead title
+              <AdminInput
+                value={settings.masthead_title ?? ''}
+                onChange={(e) => onChange('masthead_title', e.target.value)}
+              />
+            </label>
+            <label>
+              Masthead subtitle
+              <AdminInput
+                value={settings.masthead_subtitle ?? ''}
+                onChange={(e) => onChange('masthead_subtitle', e.target.value)}
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
       <label className="admin-checkbox">
-        <input type="checkbox" checked={settings.masthead_enabled ?? true} onChange={(e) => onChange('masthead_enabled', e.target.checked)} />
-        Show masthead
-      </label>
-      <label>
-        Masthead title
-        <AdminInput value={settings.masthead_title ?? ''} onChange={(e) => onChange('masthead_title', e.target.value)} />
-      </label>
-      <label>
-        Masthead subtitle
-        <AdminInput value={settings.masthead_subtitle ?? ''} onChange={(e) => onChange('masthead_subtitle', e.target.value)} />
-      </label>
-      <label className="admin-checkbox">
-        <input type="checkbox" checked={settings.masthead_show_arrow ?? true} onChange={(e) => onChange('masthead_show_arrow', e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={settings.masthead_show_arrow ?? true}
+          onChange={(e) => onChange('masthead_show_arrow', e.target.checked)}
+        />
         Show scroll arrow
       </label>
       <label className="admin-checkbox">
-        <input type="checkbox" checked={settings.show_back_to_top ?? false} onChange={(e) => onChange('show_back_to_top', e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={settings.show_back_to_top ?? false}
+          onChange={(e) => onChange('show_back_to_top', e.target.checked)}
+        />
         Show back to top arrow
       </label>
       <label>
         Grid columns
-        <select value={settings.work_grid_columns ?? 2} onChange={(e) => onChange('work_grid_columns', Number(e.target.value))}>
+        <select
+          value={settings.work_grid_columns ?? 2}
+          onChange={(e) => onChange('work_grid_columns', Number(e.target.value))}
+        >
           <option value={1}>1</option>
           <option value={2}>2</option>
           <option value={3}>3</option>
