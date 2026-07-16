@@ -554,13 +554,14 @@ export default function PageEditor() {
             </aside>
           </div>
 
-          <FloatingSaveButton
-            formId={PAGE_EDITOR_FORM_ID}
-            label={isHome ? 'Save layout & settings' : 'Save page'}
-            saving={saving}
-            dirty={dirty}
-          />
         </form>
+
+        <FloatingSaveButton
+          formId={PAGE_EDITOR_FORM_ID}
+          label={isHome ? 'Save layout & settings' : 'Save page'}
+          saving={saving}
+          dirty={dirty}
+        />
       </div>
     </main>
   )

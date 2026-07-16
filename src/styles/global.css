@@ -91,6 +91,57 @@ img {
   grid-column: 2;
 }
 
+.site-logo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s ease;
+}
+
+.site-logo-link:hover {
+  opacity: 0.65;
+}
+
+.site-logo--image_top .site-logo-link {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.site-logo--image_right .site-logo-link {
+  flex-direction: row-reverse;
+}
+
+.site-logo-image {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+}
+
+.site-logo--footer .site-logo-image {
+  height: 24px;
+  max-width: 120px;
+}
+
+.site-logo--header.site-logo--image_only .site-logo-image {
+  height: 32px;
+}
+
+.site-logo-text {
+  font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.site-logo--footer .site-logo-text {
+  font-size: inherit;
+}
+
 .logo-text a {
   font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
   font-size: 22px;
@@ -171,9 +222,19 @@ img {
   opacity: 0.5;
 }
 
-.responsive-nav-logo a {
+.responsive-nav-logo a,
+.responsive-nav-logo .site-logo-link {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 24px;
+}
+
+.responsive-nav-logo .site-logo-text {
+  font-size: 24px;
+}
+
+.responsive-nav-logo .site-logo-image {
+  height: 36px;
+  max-width: 160px;
 }
 
 .close-responsive-click-area {
@@ -430,6 +491,16 @@ img {
   padding: 40px;
   text-align: center;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.site-footer .site-logo {
+  display: inline-flex;
+  justify-content: center;
+}
+
+.site-footer .site-logo-text {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 16px;
 }
 
 .footer-text a {

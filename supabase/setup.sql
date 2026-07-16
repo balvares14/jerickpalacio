@@ -102,8 +102,13 @@ create table public.site_settings (
   logo_text text not null default 'Jerick Palacio',
   logo_link_path text not null default '/contact',
   logo_media_id uuid,
+  logo_layout text not null default 'text_only'
+    check (logo_layout in ('text_only', 'image_only', 'image_left', 'image_right', 'image_top')),
   footer_text text,
   footer_link_path text default '/contact',
+  footer_logo_layout text not null default 'text_only'
+    check (footer_logo_layout in ('text_only', 'image_only', 'image_left', 'image_right', 'image_top')),
+  logo_as_favicon boolean not null default false,
   masthead_enabled boolean not null default true,
   masthead_title text default 'We''re so glad to have you.',
   masthead_subtitle text default 'Check out what We''ve got.',

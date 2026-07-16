@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient'
 import { mergePageSettings } from '../lib/pageTemplates'
 import { collectMediaIdsFromBlocks } from '../lib/blockTypes'
 import PageContentRenderer from '../components/PageContentRenderer'
 import InquiryForm from '../components/InquiryForm'
+import SiteFooter from '../components/SiteFooter'
 import { useSite } from '../context/SiteContext'
 import {
   getContentBlocks,
@@ -19,9 +19,6 @@ export default function ContactPage() {
   const [blocks, setBlocks] = useState([])
   const [mediaMap, setMediaMap] = useState({})
   const [loading, setLoading] = useState(true)
-
-  const footerText = siteSettings.footer_text || siteSettings.logo_text
-  const footerPath = siteSettings.footer_link_path || '/contact'
 
   const contentBlocks = getContentBlocks(blocks)
   const inquiryBlock = getInquiryFormBlock(blocks)
@@ -83,11 +80,7 @@ export default function ContactPage() {
 
             {!loading && <InquiryForm config={formConfig} />}
 
-            <footer className="site-footer">
-              <div className="footer-text">
-                <Link to={footerPath}>{footerText}</Link>
-              </div>
-            </footer>
+            <SiteFooter />
           </main>
         </div>
       </div>

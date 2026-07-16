@@ -5,19 +5,15 @@ import { mergePageSettings } from '../lib/pageTemplates'
 import { collectMediaIdsFromBlocks } from '../lib/blockTypes'
 import { getContentBlocks, hasVisiblePageContent } from '../lib/inquiryFormDefaults'
 import PageContentRenderer from '../components/PageContentRenderer'
-import { useSite } from '../context/SiteContext'
+import SiteFooter from '../components/SiteFooter'
 
 export default function DynamicPage() {
   const { slug } = useParams()
-  const { settings: siteSettings } = useSite()
   const [page, setPage] = useState(null)
   const [blocks, setBlocks] = useState([])
   const [mediaMap, setMediaMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-
-  const footerText = siteSettings.footer_text || siteSettings.logo_text
-  const footerPath = siteSettings.footer_link_path || '/contact'
 
   useEffect(() => {
     async function load() {
@@ -99,11 +95,7 @@ export default function DynamicPage() {
               <PageContentRenderer page={page} blocks={blocks} mediaMap={mediaMap} />
             )}
 
-            <footer className="site-footer">
-              <div className="footer-text">
-                <Link to={footerPath}>{footerText}</Link>
-              </div>
-            </footer>
+            <SiteFooter />
           </main>
         </div>
       </div>

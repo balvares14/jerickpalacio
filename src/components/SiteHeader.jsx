@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useSite } from '../context/SiteContext'
+import SiteLogo from './SiteLogo'
 
 function isWorkPath(pathname) {
   return pathname === '/' || pathname === '/work'
@@ -31,11 +32,13 @@ export default function SiteHeader({ onMenuOpen }) {
         })}
       </nav>
       <div className="logo-wrap">
-        <div className="logo logo-text">
-          <NavLink to={logoPath} className="preserve-whitespace">
-            {logoText}
-          </NavLink>
-        </div>
+        <SiteLogo
+          text={logoText}
+          path={logoPath}
+          media={settings.logo_media}
+          layout={settings.logo_layout}
+          className="site-logo--header"
+        />
       </div>
       <div className="social pf-nav-social">
         <ul />

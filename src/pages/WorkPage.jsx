@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import ProjectCover from '../components/ProjectCover'
+import SiteFooter from '../components/SiteFooter'
 import { useSite } from '../context/SiteContext'
 import { useHomePage, useWorkItems } from '../hooks/useWorkItems'
 
@@ -47,8 +47,6 @@ export default function WorkPage() {
       }
 
   const gridClass = `project-covers project-covers--cols-${masthead.work_grid_columns ?? 2}`
-  const footerText = siteSettings.footer_text || siteSettings.logo_text
-  const footerPath = siteSettings.footer_link_path || '/contact'
   const loading = homeLoading || itemsLoading
 
   useEffect(() => {
@@ -132,11 +130,7 @@ export default function WorkPage() {
                 </>
               )}
 
-              <footer className="site-footer">
-                <div className="footer-text">
-                  <Link to={footerPath}>{footerText}</Link>
-                </div>
-              </footer>
+              <SiteFooter />
             </main>
           </div>
         </div>

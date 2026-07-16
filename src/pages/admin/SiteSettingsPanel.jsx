@@ -8,6 +8,7 @@ import { useNotice } from '../../context/NoticeContext'
 import FloatingSaveButton from '../../components/admin/FloatingSaveButton'
 import { AdminInput } from '../../components/admin/AdminField'
 import { isDirty, snapshotState } from '../../lib/dirtyState'
+import { DEFAULT_LOGO_LAYOUT, LOGO_LAYOUTS, normalizeLogoLayout } from '../../lib/logoLayouts'
 
 const SITE_SETTINGS_FORM_ID = 'site-settings-form'
 
@@ -18,9 +19,23 @@ function truncate(text, max = 48) {
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+function layoutLabel(id) {
+  return LOGO_LAYOUTS.find((item) => item.id === id)?.label ?? id
+}
+
 function settingsSnapshot(form, navItems) {
   return {
-    form,
+    form: {
+      logo_text: form.logo_text ?? '',
+      logo_link_path: form.logo_link_path ?? '/contact',
+      logo_media_id: form.logo_media_id ?? null,
+      logo_layout: normalizeLogoLayout(form.logo_layout),
+      footer_text: form.footer_text ?? '',
+      footer_link_path: form.footer_link_path ?? '/contact',
+      footer_logo_layout: normalizeLogoLayout(form.footer_logo_layout),
+      logo_as_favicon: Boolean(form.logo_as_favicon),
+      site_title: form.site_title ?? '',
+    },
     nav: navItems.map((item) => ({
       id: item.id ?? null,
       label: item.label ?? '',
@@ -38,8 +53,11 @@ export default function SiteSettingsPanel() {
     logo_text: '',
     logo_link_path: '/contact',
     logo_media_id: null,
+    logo_layout: DEFAULT_LOGO_LAYOUT,
     footer_text: '',
     footer_link_path: '/contact',
+    footer_logo_layout: DEFAULT_LOGO_LAYOUT,
+    logo_as_favicon: false,
     site_title: '',
   })
   const [navItems, setNavItems] = useState([])
@@ -71,8 +89,11 @@ export default function SiteSettingsPanel() {
           logo_text: settingsRes.data.logo_text ?? '',
           logo_link_path: settingsRes.data.logo_link_path ?? '/contact',
           logo_media_id: settingsRes.data.logo_media_id,
+          logo_layout: normalizeLogoLayout(settingsRes.data.logo_layout),
           footer_text: settingsRes.data.footer_text ?? '',
           footer_link_path: settingsRes.data.footer_link_path ?? '/contact',
+          footer_logo_layout: normalizeLogoLayout(settingsRes.data.footer_logo_layout),
+          logo_as_favicon: Boolean(settingsRes.data.logo_as_favicon),
           site_title: settingsRes.data.site_title ?? '',
         }
         setForm(nextForm)
@@ -94,7 +115,8 @@ export default function SiteSettingsPanel() {
   }
 
   function updateNav(index, key, value) {
-    setNavItems((prev) => prev.map((item, i) => (i === index ? { ...item, [key]: value } : item)))
+    const next = key === 'sort_order' ? Number(value) || 0 : value
+    setNavItems((prev) => prev.map((item, i) => (i === index ? { ...item, [key]: next } : item)))
   }
 
   async function saveNavItem(item) {
@@ -137,7 +159,6 @@ export default function SiteSettingsPanel() {
       savedNav.push(data?.id ? { ...item, id: data.id } : item)
     }
 
-    // Reload nav so newly inserted ids are tracked
     const { data: freshNav } = await supabase
       .from('nav_items')
       .select('*')
@@ -167,13 +188,18 @@ export default function SiteSettingsPanel() {
 
   const logoSummary = [
     form.logo_text || 'No logo text',
-    form.logo_media_id ? 'image' : null,
+    form.logo_media_id ? layoutLabel(form.logo_layout) : 'text only',
+    form.logo_as_favicon ? 'favicon' : null,
     form.logo_link_path,
   ]
     .filter(Boolean)
     .join(' · ')
 
-  const footerSummary = [truncate(form.footer_text) || 'No footer text', form.footer_link_path]
+  const footerSummary = [
+    truncate(form.footer_text) || 'No footer text',
+    form.logo_media_id ? layoutLabel(form.footer_logo_layout) : null,
+    form.footer_link_path,
+  ]
     .filter(Boolean)
     .join(' · ')
 
@@ -186,89 +212,148 @@ export default function SiteSettingsPanel() {
   if (loading) return <p className="admin-muted admin-loading-text">Loading settings…</p>
 
   return (
-    <form id={SITE_SETTINGS_FORM_ID} className="admin-form admin-form--compact" onSubmit={handleSave}>
-      <div className="admin-panel-heading">
-        <h2 className="admin-panel-title">Site settings</h2>
-        <p className="admin-muted">Logo, footer, and header navigation.</p>
-      </div>
+    <>
+      <form
+        id={SITE_SETTINGS_FORM_ID}
+        className="admin-form admin-form--compact admin-form--with-floating-save"
+        onSubmit={handleSave}
+      >
+        <div className="admin-panel-heading">
+          <h2 className="admin-panel-title">Site settings</h2>
+          <p className="admin-muted">Logo, footer, and header navigation.</p>
+        </div>
 
-      <CollapsibleSection title="Logo" summary={logoSummary}>
-        <label>
-          Logo text
-          <AdminInput value={form.logo_text} onChange={(e) => updateField('logo_text', e.target.value)} />
-        </label>
-        <MediaLibraryPicker
-          label="Logo image (optional)"
-          value={form.logo_media_id}
-          onChange={(id) => updateField('logo_media_id', id)}
-          accept="image/*"
-          folder={STORAGE_FOLDERS.logo}
-        />
-        <label>
-          Logo link path
-          <AdminInput value={form.logo_link_path} onChange={(e) => updateField('logo_link_path', e.target.value)} />
-        </label>
-        <label>
-          Site title (browser tab)
-          <AdminInput value={form.site_title} onChange={(e) => updateField('site_title', e.target.value)} />
-        </label>
-      </CollapsibleSection>
+        <CollapsibleSection title="Logo" summary={logoSummary}>
+          <label>
+            Logo text
+            <AdminInput value={form.logo_text} onChange={(e) => updateField('logo_text', e.target.value)} />
+          </label>
+          <MediaLibraryPicker
+            label="Logo image (optional)"
+            value={form.logo_media_id}
+            onChange={(id) => {
+              setForm((prev) => ({
+                ...prev,
+                logo_media_id: id,
+                logo_as_favicon: id ? prev.logo_as_favicon : false,
+                logo_layout: id ? prev.logo_layout : DEFAULT_LOGO_LAYOUT,
+                footer_logo_layout: id ? prev.footer_logo_layout : DEFAULT_LOGO_LAYOUT,
+              }))
+            }}
+            accept="image/*"
+            folder={STORAGE_FOLDERS.logo}
+          />
+          <label>
+            Header display
+            <select
+              value={form.logo_layout}
+              onChange={(e) => updateField('logo_layout', e.target.value)}
+              disabled={!form.logo_media_id}
+            >
+              {LOGO_LAYOUTS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Logo link path
+            <AdminInput value={form.logo_link_path} onChange={(e) => updateField('logo_link_path', e.target.value)} />
+          </label>
+          <label>
+            Site title (browser tab)
+            <AdminInput value={form.site_title} onChange={(e) => updateField('site_title', e.target.value)} />
+          </label>
+          <label className="admin-checkbox">
+            <input
+              type="checkbox"
+              checked={form.logo_as_favicon}
+              disabled={!form.logo_media_id}
+              onChange={(e) => updateField('logo_as_favicon', e.target.checked)}
+            />
+            Use logo image as favicon
+          </label>
+          {!form.logo_media_id && (
+            <p className="admin-muted admin-field-hint">Upload a logo image to enable layout options and favicon.</p>
+          )}
+        </CollapsibleSection>
 
-      <CollapsibleSection title="Footer" summary={footerSummary}>
-        <label>
-          Footer text
-          <AdminInput value={form.footer_text} onChange={(e) => updateField('footer_text', e.target.value)} />
-        </label>
-        <label>
-          Footer link path
-          <AdminInput value={form.footer_link_path} onChange={(e) => updateField('footer_link_path', e.target.value)} />
-        </label>
-      </CollapsibleSection>
+        <CollapsibleSection title="Footer" summary={footerSummary}>
+          <label>
+            Footer text
+            <AdminInput value={form.footer_text} onChange={(e) => updateField('footer_text', e.target.value)} />
+          </label>
+          <label>
+            Footer display
+            <select
+              value={form.footer_logo_layout}
+              onChange={(e) => updateField('footer_logo_layout', e.target.value)}
+              disabled={!form.logo_media_id}
+            >
+              {LOGO_LAYOUTS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Footer link path
+            <AdminInput value={form.footer_link_path} onChange={(e) => updateField('footer_link_path', e.target.value)} />
+          </label>
+        </CollapsibleSection>
 
-      <CollapsibleSection title="Header navigation" summary={navSummary}>
-        {navItems.map((item, index) => (
-          <div key={item.id ?? index} className="admin-subcard admin-subcard--compact admin-nav-row">
-            <label>
-              Label
-              <AdminInput value={item.label} onChange={(e) => updateNav(index, 'label', e.target.value)} />
-            </label>
-            <label>
-              Path
-              <AdminInput value={item.path} onChange={(e) => updateNav(index, 'path', e.target.value)} />
-            </label>
-            <label>
-              Order
-              <input
-                type="number"
-                value={item.sort_order}
-                onChange={(e) => updateNav(index, 'sort_order', e.target.value)}
-              />
-            </label>
-            <label className="admin-checkbox">
-              <input
-                type="checkbox"
-                checked={item.is_visible}
-                onChange={(e) => updateNav(index, 'is_visible', e.target.checked)}
-              />
-              Visible
-            </label>
-            {item.id && (
-              <button type="button" className="admin-btn admin-btn-ghost admin-btn-xs" onClick={() => deleteNav(item.id)}>
-                Remove
-              </button>
-            )}
-          </div>
-        ))}
-        <button
-          type="button"
-          className="admin-btn admin-btn-ghost admin-btn-xs"
-          onClick={() => setNavItems((prev) => [...prev, { ...emptyNav, sort_order: prev.length }])}
-        >
-          + Add nav link
-        </button>
-      </CollapsibleSection>
+        <CollapsibleSection title="Header navigation" summary={navSummary}>
+          {navItems.map((item, index) => (
+            <div key={item.id ?? index} className="admin-subcard admin-subcard--compact admin-nav-row">
+              <label>
+                Label
+                <AdminInput value={item.label} onChange={(e) => updateNav(index, 'label', e.target.value)} />
+              </label>
+              <label>
+                Path
+                <AdminInput value={item.path} onChange={(e) => updateNav(index, 'path', e.target.value)} />
+              </label>
+              <label>
+                Order
+                <input
+                  type="number"
+                  value={item.sort_order}
+                  onChange={(e) => updateNav(index, 'sort_order', e.target.value)}
+                />
+              </label>
+              <label className="admin-checkbox">
+                <input
+                  type="checkbox"
+                  checked={item.is_visible}
+                  onChange={(e) => updateNav(index, 'is_visible', e.target.checked)}
+                />
+                Visible
+              </label>
+              {item.id && (
+                <button type="button" className="admin-btn admin-btn-ghost admin-btn-xs" onClick={() => deleteNav(item.id)}>
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="admin-btn admin-btn-ghost admin-btn-xs"
+            onClick={() => setNavItems((prev) => [...prev, { ...emptyNav, sort_order: prev.length }])}
+          >
+            + Add nav link
+          </button>
+        </CollapsibleSection>
+      </form>
 
-      <FloatingSaveButton formId={SITE_SETTINGS_FORM_ID} label="Save site settings" saving={saving} dirty={dirty} />
-    </form>
+      <FloatingSaveButton
+        formId={SITE_SETTINGS_FORM_ID}
+        label="Save site settings"
+        saving={saving}
+        dirty={dirty}
+      />
+    </>
   )
 }

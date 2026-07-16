@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useSite } from '../context/SiteContext'
+import SiteLogo from './SiteLogo'
 
 function isWorkPath(pathname) {
   return pathname === '/' || pathname === '/work'
@@ -39,9 +40,14 @@ export default function ResponsiveNav({ open, onClose }) {
           <ul />
         </div>
         <div className="responsive-nav-logo">
-          <NavLink to={logoPath} onClick={onClose}>
-            {logoText}
-          </NavLink>
+          <SiteLogo
+            text={logoText}
+            path={logoPath}
+            media={settings.logo_media}
+            layout={settings.logo_layout}
+            className="site-logo--header"
+            onNavigate={onClose}
+          />
         </div>
       </div>
       {open && <button type="button" className="responsive-nav-backdrop" aria-label="Close menu" onClick={onClose} />}

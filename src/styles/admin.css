@@ -61,6 +61,11 @@
 
 .admin-main--dashboard {
   padding-top: 16px;
+  padding-bottom: 88px;
+}
+
+.admin-form--with-floating-save {
+  padding-bottom: 8px;
 }
 
 .admin-main-inner {
@@ -1512,6 +1517,10 @@ legend {
   font-size: 11px;
   line-height: 1.45;
   margin: 0;
+}
+
+.admin-field-hint {
+  margin-top: -4px;
 }
 
 .admin-loading-text {

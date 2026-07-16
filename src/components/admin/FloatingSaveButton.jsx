@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+
 export default function FloatingSaveButton({
   label = 'Save page',
   saving = false,
@@ -8,7 +10,7 @@ export default function FloatingSaveButton({
   const props = formId ? { type: 'submit', form: formId } : { type: 'button' }
   const idle = !dirty && !saving
 
-  return (
+  return createPortal(
     <div className="floating-save-bar">
       <button
         {...props}
@@ -18,6 +20,7 @@ export default function FloatingSaveButton({
       >
         {saving ? 'Saving…' : dirty ? label : 'Saved'}
       </button>
-    </div>
+    </div>,
+    document.body,
   )
 }
