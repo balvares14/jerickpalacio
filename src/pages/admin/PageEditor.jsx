@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getSupabaseClient } from '../../lib/supabaseClient'
 import TemplatePreview, { TemplatePickerPreview } from '../../components/admin/TemplatePreview'
@@ -20,8 +20,34 @@ import { useNotice } from '../../context/NoticeContext'
 import FloatingSaveButton from '../../components/admin/FloatingSaveButton'
 import { AdminInput, AdminTextarea } from '../../components/admin/AdminField'
 import { importLegacyWorkGrid, loadHomeWorkItems } from '../../lib/workItems'
+import { isDirty, snapshotState } from '../../lib/dirtyState'
 
 const PAGE_EDITOR_FORM_ID = 'page-editor-form'
+
+function pageSaveSnapshot(form) {
+  return {
+    title: form.title ?? '',
+    slug: form.slug ?? '',
+    template: form.template,
+    is_published: Boolean(form.is_published),
+    meta_description: form.meta_description ?? '',
+    og_image_media_id: form.og_image_media_id ?? null,
+    page_settings: form.page_settings ?? {},
+    page_type: form.page_type ?? null,
+  }
+}
+
+function workDraftSnapshot(draft) {
+  return {
+    id: draft.id ?? null,
+    title: draft.title ?? '',
+    subtitle: draft.subtitle ?? '',
+    slug: draft.slug ?? '',
+    sort_order: Number(draft.sort_order) || 0,
+    is_published: Boolean(draft.is_published),
+    cover_media_id: draft.cover_media_id ?? null,
+  }
+}
 
 function slugify(text) {
   return text
@@ -56,10 +82,42 @@ export default function PageEditor() {
   })
   const [workItems, setWorkItems] = useState([])
   const [workDraft, setWorkDraft] = useState(emptyWorkItem)
+  const [workBaseline, setWorkBaseline] = useState(() => snapshotState(workDraftSnapshot(emptyWorkItem)))
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
   const [importingLegacy, setImportingLegacy] = useState(false)
+  const [baseline, setBaseline] = useState(() => (isNew ? snapshotState(pageSaveSnapshot({
+    title: '',
+    slug: '',
+    template: 'single_column',
+    is_published: false,
+    meta_description: '',
+    og_image_media_id: null,
+    page_settings: {},
+  })) : null))
   const { showNotice, showBlockingError } = useNotice()
+
+  const dirty = useMemo(() => isDirty(pageSaveSnapshot(form), baseline), [form, baseline])
+  const workDirty = useMemo(
+    () => isDirty(workDraftSnapshot(workDraft), workBaseline),
+    [workDraft, workBaseline],
+  )
+
+  function beginWorkDraft(draft) {
+    const next = {
+      ...emptyWorkItem,
+      ...draft,
+      subtitle: draft.subtitle ?? '',
+      cover_media: draft.cover_media ?? null,
+    }
+    setWorkDraft(next)
+    setWorkBaseline(snapshotState(workDraftSnapshot(next)))
+  }
+
+  function resetWorkDraft() {
+    setWorkDraft(emptyWorkItem)
+    setWorkBaseline(snapshotState(workDraftSnapshot(emptyWorkItem)))
+  }
 
   useEffect(() => {
     if (isNew) return
@@ -89,6 +147,16 @@ export default function PageEditor() {
         slug: home ? 'work' : page.slug,
         page_settings: pageSettings,
       })
+      setBaseline(
+        snapshotState(
+          pageSaveSnapshot({
+            ...page,
+            template,
+            slug: home ? 'work' : page.slug,
+            page_settings: pageSettings,
+          }),
+        ),
+      )
 
       if (home && page.template !== 'home') {
         const { error: repairError } = await supabase
@@ -187,6 +255,7 @@ export default function PageEditor() {
     if (error) {
       showBlockingError({ message: error.message })
     } else {
+      setBaseline(snapshotState(pageSaveSnapshot(form)))
       showNotice({ title: 'Saved', message: 'Page settings were updated.' })
     }
     setSaving(false)
@@ -212,7 +281,7 @@ export default function PageEditor() {
       if (error) showBlockingError({ message: error.message })
       else {
         setWorkItems((prev) => prev.map((w) => (w.id === workDraft.id ? { ...w, ...payload, cover_media: workDraft.cover_media } : w)))
-        setWorkDraft(emptyWorkItem)
+        resetWorkDraft()
         showNotice({ title: 'Grid item saved', message: workDraft.title })
       }
     } else {
@@ -237,7 +306,7 @@ export default function PageEditor() {
       if (error) showBlockingError({ message: error.message })
       else {
         setWorkItems((prev) => [...prev, data])
-        setWorkDraft(emptyWorkItem)
+        resetWorkDraft()
         showNotice({ title: 'Grid item added', message: workDraft.title })
       }
     }
@@ -355,7 +424,10 @@ export default function PageEditor() {
               {!isNew && isHome && (
                 <fieldset>
                   <legend>Work grid items</legend>
-                  <p className="admin-muted">Cards shown on the home page. Pick cover media from the library.</p>
+                  <p className="admin-muted">
+                    Cards on the home page. Use <strong>Update item</strong> / <strong>Add item</strong> here —
+                    the bottom Save button only covers page layout &amp; settings.
+                  </p>
 
                   {workItems.length === 0 && (
                     <div className="admin-subcard admin-subcard--compact">
@@ -393,13 +465,7 @@ export default function PageEditor() {
                           <button
                             type="button"
                             className="admin-btn admin-btn-ghost admin-btn-sm"
-                            onClick={() =>
-                              setWorkDraft({
-                                ...item,
-                                subtitle: item.subtitle ?? '',
-                                cover_media: item.cover_media ?? null,
-                              })
-                            }
+                            onClick={() => beginWorkDraft(item)}
                           >
                             Edit
                           </button>
@@ -437,14 +503,21 @@ export default function PageEditor() {
                       <input type="checkbox" checked={workDraft.is_published} onChange={(e) => setWorkDraft((p) => ({ ...p, is_published: e.target.checked }))} />
                       Published
                     </label>
-                    <button type="button" className="admin-btn admin-btn-primary" onClick={saveWorkItem}>
-                      {workDraft.id ? 'Update item' : 'Add item'}
-                    </button>
-                    {workDraft.id && (
-                      <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setWorkDraft(emptyWorkItem)}>
-                        Cancel edit
+                    <div className="admin-row-actions">
+                      <button
+                        type="button"
+                        className={`admin-btn admin-btn-sm${workDirty ? ' admin-btn-dirty' : ' admin-btn-ghost'}`}
+                        onClick={saveWorkItem}
+                        disabled={!workDirty || !workDraft.title.trim()}
+                      >
+                        {workDraft.id ? (workDirty ? 'Update item' : 'Item saved') : workDirty ? 'Add item' : 'Add item'}
                       </button>
-                    )}
+                      {workDraft.id && (
+                        <button type="button" className="admin-btn admin-btn-ghost admin-btn-sm" onClick={resetWorkDraft}>
+                          Cancel edit
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </fieldset>
               )}
@@ -481,7 +554,12 @@ export default function PageEditor() {
             </aside>
           </div>
 
-          <FloatingSaveButton formId={PAGE_EDITOR_FORM_ID} saving={saving} />
+          <FloatingSaveButton
+            formId={PAGE_EDITOR_FORM_ID}
+            label={isHome ? 'Save layout & settings' : 'Save page'}
+            saving={saving}
+            dirty={dirty}
+          />
         </form>
       </div>
     </main>
