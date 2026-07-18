@@ -23,6 +23,7 @@ const defaultHomeSettings = {
   masthead_show_arrow: true,
   show_back_to_top: false,
   work_grid_columns: 2,
+  show_titles_always: false,
 }
 
 export function useHomePage() {
@@ -31,9 +32,11 @@ export function useHomePage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
+
     async function load() {
       if (!isSupabaseConfigured || !supabase) {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
         return
       }
 
@@ -47,7 +50,6 @@ export function useHomePage() {
 
       if (error) console.error('Home page load error:', error)
 
-      // Fallback: reserved /work slug (in case template drifted)
       if (!page) {
         const bySlug = await supabase
           .from('pages')
@@ -60,27 +62,48 @@ export function useHomePage() {
         if (bySlug.error) console.error('Home page slug load error:', bySlug.error)
       }
 
+      if (cancelled) return
+
       if (page) {
         setHomePage(page)
         setSettings(mergePageSettings('home', page.page_settings))
       }
       setLoading(false)
     }
+
     load()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return { homePage, settings, loading }
 }
 
-export function useWorkItems(homePageId) {
+/**
+ * @param {string|null|undefined} homePageId
+ * @param {{ homeReady?: boolean }} options - wait until home page query finished before fetching
+ */
+export function useWorkItems(homePageId, { homeReady = true } = {}) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!homeReady) {
+      setLoading(true)
+      return undefined
+    }
+
+    let cancelled = false
+
     async function load() {
+      setLoading(true)
+
       if (!isSupabaseConfigured || !supabase) {
-        setItems(mapFallback())
-        setLoading(false)
+        if (!cancelled) {
+          setItems(mapFallback())
+          setLoading(false)
+        }
         return
       }
 
@@ -105,6 +128,7 @@ export function useWorkItems(homePageId) {
       }
 
       const { data, error } = await query
+      if (cancelled) return
 
       if (error) {
         console.error('Work items load error:', error)
@@ -112,14 +136,16 @@ export function useWorkItems(homePageId) {
       } else if (data?.length) {
         setItems(data.map((item) => ({ ...item, href: `/${item.slug}` })))
       } else {
-        // Empty DB grid — keep showing legacy static covers until imported
         setItems(mapFallback())
       }
       setLoading(false)
     }
 
     load()
-  }, [homePageId])
+    return () => {
+      cancelled = true
+    }
+  }, [homePageId, homeReady])
 
   return { items, loading }
 }

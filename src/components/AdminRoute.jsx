@@ -1,17 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import LoadingOverlay from './LoadingOverlay'
 
 export default function AdminRoute({ children }) {
   const { session, isAdmin, loading } = useAuth()
   const location = useLocation()
 
   if (loading) {
-    return (
-      <div className="admin-loading">
-        <div className="admin-spinner" aria-hidden="true" />
-        <p>Loading…</p>
-      </div>
-    )
+    return <LoadingOverlay active variant="fullscreen" label="Loading admin" />
   }
 
   if (!session) {

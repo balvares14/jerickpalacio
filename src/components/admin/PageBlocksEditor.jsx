@@ -5,6 +5,7 @@ import MediaLibraryPicker from './MediaLibraryPicker'
 import { STORAGE_FOLDERS } from '../../lib/constants'
 import { useNotice } from '../../context/NoticeContext'
 import { AdminInput, AdminTextarea } from './AdminField'
+import LoadingOverlay from '../LoadingOverlay'
 
 function BlockEditor({ block, mediaMap, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast }) {
   const meta = BLOCK_TYPES[block.block_type]
@@ -332,7 +333,7 @@ export default function PageBlocksEditor({ pageId, excludeBlockTypes = [] }) {
     )
   }
 
-  if (loading) return <p className="admin-muted admin-loading-text">Loading content…</p>
+  if (loading) return <LoadingOverlay active variant="inline" label="Loading content" />
 
   return (
     <section className="page-content-section">

@@ -19,8 +19,12 @@ import { isContactPage } from '../../lib/inquiryFormDefaults'
 import { useNotice } from '../../context/NoticeContext'
 import FloatingSaveButton from '../../components/admin/FloatingSaveButton'
 import { AdminInput, AdminTextarea } from '../../components/admin/AdminField'
+import { ThemeAppearanceFields } from '../../components/admin/BackgroundColorField'
 import { importLegacyWorkGrid, loadHomeWorkItems } from '../../lib/workItems'
 import { isDirty, snapshotState } from '../../lib/dirtyState'
+import LoadingOverlay from '../../components/LoadingOverlay'
+import { useSite } from '../../context/SiteContext'
+import { sanitizeThemePageSettings, THEME_PAGE_KEYS } from '../../lib/siteTheme'
 
 const PAGE_EDITOR_FORM_ID = 'page-editor-form'
 
@@ -32,7 +36,7 @@ function pageSaveSnapshot(form) {
     is_published: Boolean(form.is_published),
     meta_description: form.meta_description ?? '',
     og_image_media_id: form.og_image_media_id ?? null,
-    page_settings: form.page_settings ?? {},
+    page_settings: sanitizeThemePageSettings(form.page_settings ?? {}),
     page_type: form.page_type ?? null,
   }
 }
@@ -70,6 +74,7 @@ export default function PageEditor() {
   const { pageId } = useParams()
   const navigate = useNavigate()
   const isNew = pageId === 'new'
+  const { settings: siteSettings } = useSite()
 
   const [form, setForm] = useState({
     title: '',
@@ -114,9 +119,31 @@ export default function PageEditor() {
     setWorkBaseline(snapshotState(workDraftSnapshot(next)))
   }
 
-  function resetWorkDraft() {
-    setWorkDraft(emptyWorkItem)
-    setWorkBaseline(snapshotState(workDraftSnapshot(emptyWorkItem)))
+  function resetWorkDraft(nextOrder = workItems.length) {
+    const next = { ...emptyWorkItem, sort_order: nextOrder }
+    setWorkDraft(next)
+    setWorkBaseline(snapshotState(workDraftSnapshot(next)))
+  }
+
+  async function moveWorkItem(index, direction) {
+    const newIndex = index + direction
+    if (newIndex < 0 || newIndex >= workItems.length) return
+    const reordered = [...workItems]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(newIndex, 0, moved)
+    const withOrder = reordered.map((item, i) => ({ ...item, sort_order: i }))
+    setWorkItems(withOrder)
+
+    const supabase = getSupabaseClient()
+    const results = await Promise.all(
+      withOrder.map((item, i) => supabase.from('work_items').update({ sort_order: i }).eq('id', item.id)),
+    )
+    const firstError = results.find((r) => r.error)?.error
+    if (firstError) {
+      showBlockingError({ message: firstError.message })
+      return
+    }
+    showNotice({ title: 'Reordered', message: 'Work grid order updated.', autoDismissMs: 2500 })
   }
 
   useEffect(() => {
@@ -184,6 +211,9 @@ export default function PageEditor() {
         try {
           const items = await loadHomeWorkItems(page.id)
           setWorkItems(items)
+          const next = { ...emptyWorkItem, sort_order: items.length }
+          setWorkDraft(next)
+          setWorkBaseline(snapshotState(workDraftSnapshot(next)))
         } catch (err) {
           showBlockingError({ message: err.message || 'Could not load work grid items.' })
         }
@@ -200,10 +230,15 @@ export default function PageEditor() {
   }
 
   function updateSetting(key, value) {
-    setForm((prev) => ({
-      ...prev,
-      page_settings: { ...prev.page_settings, [key]: value },
-    }))
+    setForm((prev) => {
+      const page_settings = { ...prev.page_settings }
+      if (THEME_PAGE_KEYS.includes(key) && (value == null || value === '')) {
+        delete page_settings[key]
+      } else {
+        page_settings[key] = value
+      }
+      return { ...prev, page_settings }
+    })
   }
 
   function handleTemplateChange(template) {
@@ -235,7 +270,7 @@ export default function PageEditor() {
       is_published: form.is_published,
       meta_description: form.meta_description || null,
       og_image_media_id: form.og_image_media_id,
-      page_settings: form.page_settings,
+      page_settings: sanitizeThemePageSettings(form.page_settings),
     }
 
     if (isNew) {
@@ -280,7 +315,12 @@ export default function PageEditor() {
       const { error } = await supabase.from('work_items').update(payload).eq('id', workDraft.id)
       if (error) showBlockingError({ message: error.message })
       else {
-        setWorkItems((prev) => prev.map((w) => (w.id === workDraft.id ? { ...w, ...payload, cover_media: workDraft.cover_media } : w)))
+        setWorkItems((prev) => {
+          const next = prev.map((w) =>
+            w.id === workDraft.id ? { ...w, ...payload, cover_media: workDraft.cover_media } : w,
+          )
+          return next.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        })
         resetWorkDraft()
         showNotice({ title: 'Grid item saved', message: workDraft.title })
       }
@@ -299,14 +339,22 @@ export default function PageEditor() {
 
       const { data, error } = await supabase
         .from('work_items')
-        .insert({ ...payload, detail_page_id: detailPage?.id })
+        .insert({
+          ...payload,
+          sort_order: Number.isFinite(Number(workDraft.sort_order))
+            ? Number(workDraft.sort_order)
+            : workItems.length,
+          detail_page_id: detailPage?.id,
+        })
         .select(`*, cover_media:media_assets!cover_media_id (*)`)
         .single()
 
       if (error) showBlockingError({ message: error.message })
       else {
-        setWorkItems((prev) => [...prev, data])
-        resetWorkDraft()
+        setWorkItems((prev) =>
+          [...prev, data].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+        )
+        resetWorkDraft(workItems.length + 1)
         showNotice({ title: 'Grid item added', message: workDraft.title })
       }
     }
@@ -336,6 +384,9 @@ export default function PageEditor() {
       const created = await importLegacyWorkGrid(pageId)
       const items = await loadHomeWorkItems(pageId)
       setWorkItems(items)
+      const next = { ...emptyWorkItem, sort_order: items.length }
+      setWorkDraft(next)
+      setWorkBaseline(snapshotState(workDraftSnapshot(next)))
       showNotice({
         title: 'Legacy grid imported',
         message: created.length
@@ -348,7 +399,7 @@ export default function PageEditor() {
     setImportingLegacy(false)
   }
 
-  if (loading) return <p className="admin-muted">Loading page…</p>
+  if (loading) return <LoadingOverlay active variant="inline" label="Loading page" />
 
   const isHome = isHomePage(form)
   const isContact = isContactPage(form)
@@ -425,8 +476,9 @@ export default function PageEditor() {
                 <fieldset>
                   <legend>Work grid items</legend>
                   <p className="admin-muted">
-                    Cards on the home page. Use <strong>Update item</strong> / <strong>Add item</strong> here —
-                    the bottom Save button only covers page layout &amp; settings.
+                    Cards on the home page. Use ↑↓ to set grid position. Use <strong>Update item</strong> /{' '}
+                    <strong>Add item</strong> for card details — the bottom Save button only covers page layout
+                    &amp; settings.
                   </p>
 
                   {workItems.length === 0 && (
@@ -446,7 +498,7 @@ export default function PageEditor() {
                   )}
 
                   <ul className="work-items-list">
-                    {workItems.map((item) => (
+                    {workItems.map((item, index) => (
                       <li key={item.id} className="work-items-list-row">
                         <div className="work-items-list-main">
                           {item.cover_media?.public_url ? (
@@ -456,12 +508,31 @@ export default function PageEditor() {
                           )}
                           <span>
                             <strong>{item.title}</strong> · /{item.slug}
+                            <span className="admin-muted"> · #{index + 1}</span>
                             {!item.cover_media_id && (
                               <span className="admin-muted"> · no cover</span>
                             )}
                           </span>
                         </div>
                         <div className="admin-row-actions">
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-ghost admin-btn-sm"
+                            disabled={index === 0}
+                            onClick={() => moveWorkItem(index, -1)}
+                            aria-label="Move up"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-ghost admin-btn-sm"
+                            disabled={index === workItems.length - 1}
+                            onClick={() => moveWorkItem(index, 1)}
+                            aria-label="Move down"
+                          >
+                            ↓
+                          </button>
                           <button
                             type="button"
                             className="admin-btn admin-btn-ghost admin-btn-sm"
@@ -491,6 +562,17 @@ export default function PageEditor() {
                       Slug
                       <AdminInput value={workDraft.slug} onChange={(e) => setWorkDraft((p) => ({ ...p, slug: e.target.value }))} placeholder={slugify(workDraft.title)} />
                     </label>
+                    <label>
+                      Position
+                      <input
+                        type="number"
+                        min={0}
+                        value={workDraft.sort_order}
+                        onChange={(e) =>
+                          setWorkDraft((p) => ({ ...p, sort_order: Number(e.target.value) || 0 }))
+                        }
+                      />
+                    </label>
                     <MediaLibraryPicker
                       label="Cover media"
                       value={workDraft.cover_media_id}
@@ -513,7 +595,7 @@ export default function PageEditor() {
                         {workDraft.id ? (workDirty ? 'Update item' : 'Item saved') : workDirty ? 'Add item' : 'Add item'}
                       </button>
                       {workDraft.id && (
-                        <button type="button" className="admin-btn admin-btn-ghost admin-btn-sm" onClick={resetWorkDraft}>
+                        <button type="button" className="admin-btn admin-btn-ghost admin-btn-sm" onClick={() => resetWorkDraft()}>
                           Cancel edit
                         </button>
                       )}
@@ -533,6 +615,19 @@ export default function PageEditor() {
                   <PageLayoutSettings template={form.template} settings={form.page_settings} onChange={updateSetting} isContact={isContact} />
                 </>
               )}
+
+              <fieldset>
+                <legend>Page appearance</legend>
+                <ThemeAppearanceFields
+                  allowInherit
+                  values={form.page_settings}
+                  siteDefaults={siteSettings}
+                  onChange={updateSetting}
+                />
+                <p className="admin-muted admin-field-hint">
+                  Applies to this page’s background, text, header, and footer. Inherit to use Site settings defaults.
+                </p>
+              </fieldset>
 
               {!isNew && isContact && <InquiryFormBlockEditor pageId={pageId} />}
             </div>
@@ -623,6 +718,14 @@ function HomeTemplateSettings({ settings, onChange }) {
           onChange={(e) => onChange('show_back_to_top', e.target.checked)}
         />
         Show back to top arrow
+      </label>
+      <label className="admin-checkbox">
+        <input
+          type="checkbox"
+          checked={settings.show_titles_always ?? false}
+          onChange={(e) => onChange('show_titles_always', e.target.checked)}
+        />
+        Show titles always
       </label>
       <label>
         Grid columns

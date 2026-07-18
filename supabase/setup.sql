@@ -109,6 +109,9 @@ create table public.site_settings (
   footer_logo_layout text not null default 'text_only'
     check (footer_logo_layout in ('text_only', 'image_only', 'image_left', 'image_right', 'image_top')),
   logo_as_favicon boolean not null default false,
+  background_color text not null default '#ffffff',
+  text_color text not null default '#111111',
+  font_family text not null default 'work_sans',
   masthead_enabled boolean not null default true,
   masthead_title text default 'We''re so glad to have you.',
   masthead_subtitle text default 'Check out what We''ve got.',
@@ -475,7 +478,8 @@ values (
     'masthead_subtitle', 'Check out what We''ve got.',
     'masthead_show_arrow', true,
     'show_back_to_top', false,
-    'work_grid_columns', 2
+    'work_grid_columns', 2,
+    'show_titles_always', false
   )
 );
 

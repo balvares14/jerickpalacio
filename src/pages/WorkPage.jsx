@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import ProjectCover from '../components/ProjectCover'
 import SiteFooter from '../components/SiteFooter'
 import { useSite } from '../context/SiteContext'
+import { usePageLoading } from '../context/RouteLoadingContext'
+import { usePageTheme } from '../context/PageBackgroundContext'
 import { useHomePage, useWorkItems } from '../hooks/useWorkItems'
 
 function BackToTopIcon() {
@@ -31,7 +33,7 @@ function BackToTopIcon() {
 export default function WorkPage() {
   const { settings: siteSettings } = useSite()
   const { homePage, settings: pageSettings, loading: homeLoading } = useHomePage()
-  const { items, loading: itemsLoading } = useWorkItems(homePage?.id)
+  const { items, loading: itemsLoading } = useWorkItems(homePage?.id, { homeReady: !homeLoading })
   const [showFixedBackToTop, setShowFixedBackToTop] = useState(false)
 
   // Fall back to site_settings masthead if home page row not migrated yet
@@ -44,10 +46,19 @@ export default function WorkPage() {
         masthead_show_arrow: siteSettings.masthead_show_arrow,
         show_back_to_top: false,
         work_grid_columns: siteSettings.work_grid_columns,
+        show_titles_always: false,
       }
 
-  const gridClass = `project-covers project-covers--cols-${masthead.work_grid_columns ?? 2}`
+  const gridClass = [
+    'project-covers',
+    `project-covers--cols-${masthead.work_grid_columns ?? 2}`,
+    masthead.show_titles_always ? 'project-covers--titles-always' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
   const loading = homeLoading || itemsLoading
+  usePageLoading(loading)
+  usePageTheme(masthead)
 
   useEffect(() => {
     document.title = homePage?.title || siteSettings.site_title || siteSettings.logo_text || 'Portfolio'
@@ -101,13 +112,13 @@ export default function WorkPage() {
           <div className="site-content">
             <main>
               <section className={gridClass} id="project-gallery">
-                {loading && <p className="work-loading">Loading…</p>}
                 {!loading && items.length === 0 && (
                   <p className="work-empty">No published work yet. Add grid items on the Home page in admin.</p>
                 )}
-                {items.map((project) => (
-                  <ProjectCover key={project.id} project={project} />
-                ))}
+                {!loading &&
+                  items.map((project) => (
+                    <ProjectCover key={project.id} project={project} />
+                  ))}
               </section>
 
               {masthead.show_back_to_top && (

@@ -8,6 +8,7 @@ import {
 import { useNotice } from '../../context/NoticeContext'
 import CollapsibleSection from './CollapsibleSection'
 import { AdminInput, AdminTextarea } from './AdminField'
+import LoadingOverlay from '../LoadingOverlay'
 
 function truncate(text, max = 40) {
   if (!text) return ''
@@ -79,7 +80,7 @@ export default function InquiryFormBlockEditor({ pageId }) {
     else showNotice({ title: 'Saved', message: 'Inquiry form copy updated.' })
   }
 
-  if (loading) return <p className="admin-muted admin-loading-text">Loading inquiry form…</p>
+  if (loading) return <LoadingOverlay active variant="inline" label="Loading inquiry form" />
 
   const summary = truncate(content.form_title || DEFAULT_INQUIRY_FORM.form_title)
 

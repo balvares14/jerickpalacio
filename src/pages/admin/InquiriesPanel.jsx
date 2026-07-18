@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getSupabaseClient } from '../../lib/supabaseClient'
+import LoadingOverlay from '../../components/LoadingOverlay'
 
 export default function InquiriesPanel() {
   const [inquiries, setInquiries] = useState([])
@@ -21,7 +22,7 @@ export default function InquiriesPanel() {
     load()
   }, [])
 
-  if (loading) return <p className="admin-muted">Loading inquiries…</p>
+  if (loading) return <LoadingOverlay active variant="inline" label="Loading inquiries" />
 
   return (
     <div className="admin-form admin-form--compact">

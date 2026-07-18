@@ -6,6 +6,8 @@ import PageContentRenderer from '../components/PageContentRenderer'
 import InquiryForm from '../components/InquiryForm'
 import SiteFooter from '../components/SiteFooter'
 import { useSite } from '../context/SiteContext'
+import { usePageLoading } from '../context/RouteLoadingContext'
+import { usePageTheme } from '../context/PageBackgroundContext'
 import {
   getContentBlocks,
   getInquiryFormBlock,
@@ -19,6 +21,8 @@ export default function ContactPage() {
   const [blocks, setBlocks] = useState([])
   const [mediaMap, setMediaMap] = useState({})
   const [loading, setLoading] = useState(true)
+  usePageLoading(loading)
+  usePageTheme(page?.page_settings)
 
   const contentBlocks = getContentBlocks(blocks)
   const inquiryBlock = getInquiryFormBlock(blocks)
@@ -72,15 +76,13 @@ export default function ContactPage() {
       <div className="site-container">
         <div className="site-content">
           <main className="contact-page">
-            {loading && <p className="work-loading">Loading…</p>}
-
             {!loading && showPageContent && (
               <PageContentRenderer page={page} blocks={contentBlocks} mediaMap={mediaMap} />
             )}
 
             {!loading && <InquiryForm config={formConfig} />}
 
-            <SiteFooter />
+            {!loading && <SiteFooter />}
           </main>
         </div>
       </div>

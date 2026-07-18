@@ -5,15 +5,21 @@
   box-sizing: border-box;
 }
 
+:root {
+  --site-bg: #ffffff;
+  --site-text: #111111;
+  --site-font: 'Work Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
-  color: #111;
-  background: #fff;
-  font-family: 'Work Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--site-text);
+  background: var(--site-bg);
+  font-family: var(--site-font);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -64,7 +70,7 @@ img {
   align-items: center;
   height: 70px;
   padding: 0 40px;
-  background: #fff;
+  background: var(--site-bg);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
@@ -202,7 +208,7 @@ img {
   align-items: center;
   justify-content: center;
   gap: 32px;
-  background: #fff;
+  background: var(--site-bg);
 }
 
 .responsive-nav .nav-container {
@@ -412,7 +418,12 @@ img {
   transition: opacity 0.35s ease;
 }
 
-.project-cover:hover .details-wrap {
+.project-cover:hover .details-wrap,
+.project-cover:focus-within .details-wrap {
+  opacity: 1;
+}
+
+.project-covers--titles-always .details-wrap {
   opacity: 1;
 }
 
@@ -466,7 +477,7 @@ img {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
+  background: color-mix(in srgb, var(--site-bg) 95%, transparent);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
   opacity: 0;
   visibility: hidden;
@@ -938,3 +949,124 @@ img {
     display: none;
   }
 }
+
+/* Route / data loading overlay — logo above spinner */
+.loading-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 450;
+  background: color-mix(in srgb, var(--site-bg) 92%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: loading-overlay-in 0.2s ease both;
+}
+
+.loading-overlay--fullscreen {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+  animation: none;
+}
+
+.loading-overlay--fullscreen.is-active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.loading-overlay--fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 20;
+}
+
+.loading-overlay--inline {
+  position: relative;
+  min-height: 220px;
+  width: 100%;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  animation: none;
+}
+
+.loading-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+}
+
+.loading-overlay-logo-image {
+  height: 36px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.loading-overlay-logo-text {
+  font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: #111;
+}
+
+.loading-spinner {
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid rgba(0, 0, 0, 0.12);
+  border-top-color: #111;
+  border-radius: 50%;
+  animation: loading-spin 0.7s linear infinite;
+}
+
+.page-transition {
+  animation: page-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-loading-shell {
+  min-height: 40vh;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loading-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-overlay,
+  .page-transition,
+  .loading-spinner {
+    animation: none;
+  }
+}
+

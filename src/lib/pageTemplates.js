@@ -11,6 +11,7 @@ export const PAGE_TEMPLATES = {
       masthead_show_arrow: true,
       show_back_to_top: false,
       work_grid_columns: 2,
+      show_titles_always: false,
     },
   },
   single_column: {

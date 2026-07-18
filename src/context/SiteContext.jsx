@@ -2,6 +2,14 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient'
 import { SITE_NAME } from '../data/projects'
 import { DEFAULT_LOGO_LAYOUT, normalizeLogoLayout } from '../lib/logoLayouts'
+import {
+  DEFAULT_BACKGROUND_COLOR,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_TEXT_COLOR,
+  normalizeBackgroundColor,
+  normalizeFontFamily,
+  normalizeTextColor,
+} from '../lib/siteTheme'
 
 const defaultSettings = {
   logo_text: SITE_NAME,
@@ -13,6 +21,9 @@ const defaultSettings = {
   footer_link_path: '/contact',
   footer_logo_layout: DEFAULT_LOGO_LAYOUT,
   logo_as_favicon: false,
+  background_color: DEFAULT_BACKGROUND_COLOR,
+  text_color: DEFAULT_TEXT_COLOR,
+  font_family: DEFAULT_FONT_FAMILY,
   masthead_enabled: true,
   masthead_title: "We're so glad to have you.",
   masthead_subtitle: "Check out what We've got.",
@@ -45,6 +56,9 @@ function normalizeSettings(row) {
     logo_layout: normalizeLogoLayout(rest.logo_layout),
     footer_logo_layout: normalizeLogoLayout(rest.footer_logo_layout),
     logo_as_favicon: Boolean(rest.logo_as_favicon),
+    background_color: normalizeBackgroundColor(rest.background_color),
+    text_color: normalizeTextColor(rest.text_color),
+    font_family: normalizeFontFamily(rest.font_family),
     logo_media: logo_media ?? null,
   }
 }

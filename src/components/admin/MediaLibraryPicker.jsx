@@ -4,6 +4,7 @@ import { createMediaAssetFromUrl, uploadMediaAsset } from '../../lib/storage'
 import { STORAGE_FOLDERS } from '../../lib/constants'
 import { MediaThumb } from '../MediaDisplay'
 import { isYouTubeAsset } from '../../lib/mediaUrls'
+import LoadingOverlay from '../LoadingOverlay'
 
 function acceptAllows(accept, kind) {
   if (!accept || accept === '*/*') return true
@@ -190,10 +191,11 @@ export default function MediaLibraryPicker({
           />
           <div className="media-picker-dialog">
             {(busy || loading) && (
-              <div className="media-picker-busy" role="status" aria-live="polite">
-                <div className="admin-spinner" aria-hidden="true" />
-                <p>{uploading ? 'Uploading…' : linking ? 'Adding link…' : 'Loading library…'}</p>
-              </div>
+              <LoadingOverlay
+                active
+                variant="fill"
+                label={uploading ? 'Uploading' : linking ? 'Adding link' : 'Loading library'}
+              />
             )}
 
             <div className="media-picker-dialog-header">

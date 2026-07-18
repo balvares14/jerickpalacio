@@ -9,6 +9,17 @@ import FloatingSaveButton from '../../components/admin/FloatingSaveButton'
 import { AdminInput } from '../../components/admin/AdminField'
 import { isDirty, snapshotState } from '../../lib/dirtyState'
 import { DEFAULT_LOGO_LAYOUT, LOGO_LAYOUTS, normalizeLogoLayout } from '../../lib/logoLayouts'
+import LoadingOverlay from '../../components/LoadingOverlay'
+import { ThemeAppearanceFields } from '../../components/admin/BackgroundColorField'
+import {
+  DEFAULT_BACKGROUND_COLOR,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_TEXT_COLOR,
+  getFontMeta,
+  normalizeBackgroundColor,
+  normalizeFontFamily,
+  normalizeTextColor,
+} from '../../lib/siteTheme'
 
 const SITE_SETTINGS_FORM_ID = 'site-settings-form'
 
@@ -34,6 +45,9 @@ function settingsSnapshot(form, navItems) {
       footer_link_path: form.footer_link_path ?? '/contact',
       footer_logo_layout: normalizeLogoLayout(form.footer_logo_layout),
       logo_as_favicon: Boolean(form.logo_as_favicon),
+      background_color: normalizeBackgroundColor(form.background_color),
+      text_color: normalizeTextColor(form.text_color),
+      font_family: normalizeFontFamily(form.font_family),
       site_title: form.site_title ?? '',
     },
     nav: navItems.map((item) => ({
@@ -58,10 +72,14 @@ export default function SiteSettingsPanel() {
     footer_link_path: '/contact',
     footer_logo_layout: DEFAULT_LOGO_LAYOUT,
     logo_as_favicon: false,
+    background_color: DEFAULT_BACKGROUND_COLOR,
+    text_color: DEFAULT_TEXT_COLOR,
+    font_family: DEFAULT_FONT_FAMILY,
     site_title: '',
   })
   const [navItems, setNavItems] = useState([])
   const [saving, setSaving] = useState(false)
+  const [applyingTheme, setApplyingTheme] = useState(false)
   const [loading, setLoading] = useState(true)
   const [baseline, setBaseline] = useState(null)
   const { showNotice, showBlockingError } = useNotice()
@@ -94,6 +112,9 @@ export default function SiteSettingsPanel() {
           footer_link_path: settingsRes.data.footer_link_path ?? '/contact',
           footer_logo_layout: normalizeLogoLayout(settingsRes.data.footer_logo_layout),
           logo_as_favicon: Boolean(settingsRes.data.logo_as_favicon),
+          background_color: normalizeBackgroundColor(settingsRes.data.background_color),
+          text_color: normalizeTextColor(settingsRes.data.text_color),
+          font_family: normalizeFontFamily(settingsRes.data.font_family),
           site_title: settingsRes.data.site_title ?? '',
         }
         setForm(nextForm)
@@ -137,9 +158,16 @@ export default function SiteSettingsPanel() {
     setSaving(true)
     const supabase = getSupabaseClient()
 
+    const payload = {
+      ...form,
+      background_color: normalizeBackgroundColor(form.background_color),
+      text_color: normalizeTextColor(form.text_color),
+      font_family: normalizeFontFamily(form.font_family),
+    }
+
     const { error: settingsError } = settingsId
-      ? await supabase.from('site_settings').update(form).eq('id', settingsId)
-      : await supabase.from('site_settings').insert(form)
+      ? await supabase.from('site_settings').update(payload).eq('id', settingsId)
+      : await supabase.from('site_settings').insert(payload)
 
     if (settingsError) {
       showBlockingError({ message: settingsError.message })
@@ -166,10 +194,82 @@ export default function SiteSettingsPanel() {
 
     if (freshNav) setNavItems(freshNav)
 
+    setForm(payload)
     await refreshSite()
-    setBaseline(snapshotState(settingsSnapshot(form, freshNav ?? savedNav)))
+    setBaseline(snapshotState(settingsSnapshot(payload, freshNav ?? savedNav)))
     showNotice({ title: 'Saved', message: 'Site settings updated.' })
     setSaving(false)
+  }
+
+  async function applyThemeToAllPages() {
+    const theme = {
+      background_color: normalizeBackgroundColor(form.background_color),
+      text_color: normalizeTextColor(form.text_color),
+      font_family: normalizeFontFamily(form.font_family),
+    }
+    if (
+      !window.confirm(
+        `Update all page appearances to this theme? This overwrites each page’s background, text color, and font, and saves them as the site defaults.`,
+      )
+    ) {
+      return
+    }
+
+    setApplyingTheme(true)
+    const supabase = getSupabaseClient()
+
+    const settingsPayload = {
+      ...form,
+      ...theme,
+    }
+
+    const { error: settingsError } = settingsId
+      ? await supabase.from('site_settings').update(theme).eq('id', settingsId)
+      : await supabase.from('site_settings').insert(settingsPayload)
+
+    if (settingsError) {
+      showBlockingError({ message: settingsError.message })
+      setApplyingTheme(false)
+      return
+    }
+
+    const { data: pages, error: pagesError } = await supabase.from('pages').select('id, page_settings')
+    if (pagesError) {
+      showBlockingError({ message: pagesError.message })
+      setApplyingTheme(false)
+      return
+    }
+
+    const results = await Promise.all(
+      (pages ?? []).map((page) =>
+        supabase
+          .from('pages')
+          .update({
+            page_settings: {
+              ...(page.page_settings && typeof page.page_settings === 'object' ? page.page_settings : {}),
+              ...theme,
+            },
+          })
+          .eq('id', page.id),
+      ),
+    )
+
+    const firstError = results.find((r) => r.error)?.error
+    if (firstError) {
+      showBlockingError({ message: firstError.message })
+      setApplyingTheme(false)
+      return
+    }
+
+    const nextForm = { ...form, ...theme }
+    setForm(nextForm)
+    await refreshSite()
+    setBaseline(snapshotState(settingsSnapshot(nextForm, navItems)))
+    showNotice({
+      title: 'Theme updated',
+      message: `Applied appearance to ${pages?.length ?? 0} page${(pages?.length ?? 0) === 1 ? '' : 's'} and the site defaults.`,
+    })
+    setApplyingTheme(false)
   }
 
   async function deleteNav(id) {
@@ -209,7 +309,7 @@ export default function SiteSettingsPanel() {
       ? 'No links'
       : `${visibleNav.length} link${visibleNav.length === 1 ? '' : 's'} · ${visibleNav.map((n) => n.label).join(', ')}`
 
-  if (loading) return <p className="admin-muted admin-loading-text">Loading settings…</p>
+  if (loading) return <LoadingOverlay active variant="inline" label="Loading settings" />
 
   return (
     <>
@@ -220,7 +320,7 @@ export default function SiteSettingsPanel() {
       >
         <div className="admin-panel-heading">
           <h2 className="admin-panel-title">Site settings</h2>
-          <p className="admin-muted">Logo, footer, and header navigation.</p>
+          <p className="admin-muted">Logo, appearance, footer, and header navigation.</p>
         </div>
 
         <CollapsibleSection title="Logo" summary={logoSummary}>
@@ -277,6 +377,27 @@ export default function SiteSettingsPanel() {
           {!form.logo_media_id && (
             <p className="admin-muted admin-field-hint">Upload a logo image to enable layout options and favicon.</p>
           )}
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Appearance"
+          summary={`${normalizeBackgroundColor(form.background_color)} · ${normalizeTextColor(form.text_color)} · ${getFontMeta(form.font_family).label}`}
+        >
+          <ThemeAppearanceFields
+            values={form}
+            onChange={(key, value) => updateField(key, value)}
+          />
+          <p className="admin-muted admin-field-hint">
+            Site defaults for pages that inherit. Current defaults: white background, near-black text, Work Sans.
+          </p>
+          <button
+            type="button"
+            className="admin-btn admin-btn-ghost admin-btn-sm"
+            onClick={applyThemeToAllPages}
+            disabled={applyingTheme || saving}
+          >
+            {applyingTheme ? 'Updating pages…' : 'Update all page appearances to this theme'}
+          </button>
         </CollapsibleSection>
 
         <CollapsibleSection title="Footer" summary={footerSummary}>

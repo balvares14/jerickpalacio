@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getSupabaseClient } from '../../lib/supabaseClient'
 import { getTemplateLabel, isHomePage } from '../../lib/pageTemplates'
 import { useNotice } from '../../context/NoticeContext'
+import LoadingOverlay from '../../components/LoadingOverlay'
 
 function pagePath(page) {
   if (isHomePage(page)) return '/work'
@@ -59,7 +60,7 @@ export default function PagesPanel() {
     }
   }
 
-  if (loading) return <p className="admin-muted admin-loading-text">Loading pages…</p>
+  if (loading) return <LoadingOverlay active variant="inline" label="Loading pages" />
 
   return (
     <div className="admin-form admin-form--compact">

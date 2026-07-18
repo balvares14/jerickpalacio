@@ -6,6 +6,8 @@ import { collectMediaIdsFromBlocks } from '../lib/blockTypes'
 import { getContentBlocks, hasVisiblePageContent } from '../lib/inquiryFormDefaults'
 import PageContentRenderer from '../components/PageContentRenderer'
 import SiteFooter from '../components/SiteFooter'
+import { usePageLoading } from '../context/RouteLoadingContext'
+import { usePageTheme } from '../context/PageBackgroundContext'
 
 export default function DynamicPage() {
   const { slug } = useParams()
@@ -14,12 +16,24 @@ export default function DynamicPage() {
   const [mediaMap, setMediaMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  usePageLoading(loading)
+  usePageTheme(page?.page_settings)
 
   useEffect(() => {
+    let cancelled = false
+
     async function load() {
+      setLoading(true)
+      setNotFound(false)
+      setPage(null)
+      setBlocks([])
+      setMediaMap({})
+
       if (!isSupabaseConfigured || !supabase) {
-        setNotFound(true)
-        setLoading(false)
+        if (!cancelled) {
+          setNotFound(true)
+          setLoading(false)
+        }
         return
       }
 
@@ -30,6 +44,8 @@ export default function DynamicPage() {
         .eq('is_published', true)
         .neq('template', 'home')
         .maybeSingle()
+
+      if (cancelled) return
 
       if (error || !pageData) {
         setNotFound(true)
@@ -45,12 +61,15 @@ export default function DynamicPage() {
         .eq('page_id', pageData.id)
         .order('sort_order', { ascending: true })
 
+      if (cancelled) return
+
       const contentBlocks = getContentBlocks(blockData ?? [])
       setBlocks(contentBlocks)
 
       const mediaIds = collectMediaIdsFromBlocks(contentBlocks)
       if (mediaIds.length) {
         const { data: media } = await supabase.from('media_assets').select('*').in('id', mediaIds)
+        if (cancelled) return
         const map = {}
         media?.forEach((m) => { map[m.id] = m })
         setMediaMap(map)
@@ -61,14 +80,13 @@ export default function DynamicPage() {
     }
 
     load()
+    return () => {
+      cancelled = true
+    }
   }, [slug])
 
   if (loading) {
-    return (
-      <div className="site-wrap">
-        <p className="work-loading">Loading…</p>
-      </div>
-    )
+    return <div className="site-wrap page-loading-shell" aria-hidden="true" />
   }
 
   if (notFound) {
